@@ -1,0 +1,73 @@
+[package]
+name = "daylio-analyze"
+version = "0.1.0"
+edition = "2021"
+authors = ["Kim D. Jeker <git@kije.ch>"]
+
+[features]
+default = ["debug"]
+debug = ["fmt", "csv"]
+fmt = ["polars/fmt"]
+csv = ["polars/csv"]
+
+
+[dependencies]
+phf = { version = "^0.11", features = ["macros"] }
+const-gen = { version = "^1.4.1" }
+thiserror = "^1.0.48"
+enum-kinds = "^0.5.1"
+enum_access = "^0.4.0"
+# impl-enum = "^0.3.0"
+
+
+[dependencies.polars]
+version = "^0.32.1"
+default-features = false
+features = [
+    "temporal",
+    "async",
+    "simd",
+    "avx512",
+    "performant",
+    "lazy",
+    "strings",
+    "cse",
+    "concat_str",
+    "abs",
+    "checked_arithmetic",
+    "diff",
+    "ndarray",
+    "list_eval",
+    "sign",
+    "extract_groups",
+    "dtype-date",
+    "dtype-datetime",
+    "dtype-time",
+    "dtype-i8",
+    "dtype-u8",
+    "dtype-i16",
+    "dtype-categorical",
+    "dtype-struct",
+    "lazy_regex",
+    "list_sets"
+]
+
+[build-dependencies]
+phf = { version = "^0.11", default-features = false }
+phf_codegen = "^0.11"
+syn = { version = "^2.0", features = ["full"] }
+quote = "^1.0"
+proc-macro2 = "^1.0"
+const-gen = { version = "1.4.1" }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+strip = true
+
+
+[profile.release.package."*"]
+opt-level = 3
+codegen-units = 1
+strip = true

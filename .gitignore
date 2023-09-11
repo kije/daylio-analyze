@@ -1,0 +1,5 @@
+/target
+/Cargo.lock
+/.idea
+
+daylio_export_processed.csv

@@ -303,17 +303,19 @@ fn main() {
     writeln!(
         &mut file,
         "{}",
-        const_declaration!(pub(crate) TIME_OF_DAY_INTERVALS = time_blocks)
+        static_declaration!(pub(crate) TIME_OF_DAY_INTERVALS = time_blocks)
     )
     .unwrap();
 
-    writeln!(&mut file, "{}", const_definition!(#[derive(Hash, Eq, PartialEq, Debug, Clone, Copy)] #[non_exhaustive] pub FactorType)).unwrap();
+    writeln!(
+        &mut file, "{}", 
+        const_definition!(#[derive(Hash, Eq, PartialEq, Debug, Clone, Copy, ::enum_access::EnumAccess)] #[non_exhaustive] #[enum_access(get(tag = "pub", name = "pub"))]  pub FactorType)
+    ).unwrap();
 
     writeln!(
         &mut file,
         "{}",
-        // const_definition!(#[derive(Hash, Eq, PartialEq, Debug, Clone, Copy, ::enum_access::EnumAccess)] #[enum_access(get(name, tag), iter(types))]  pub  Factor)
-        const_definition!(#[derive(Hash, Eq, PartialEq, Debug, Clone, Copy)]  pub  Factor)
+        const_definition!(#[derive(Hash, Eq, PartialEq, Debug, Clone, Copy, ::enum_access::EnumAccess)] #[enum_access(get(name = "pub", tag = "pub", types = "pub"))]  pub  Factor)
     )
     .unwrap();
 
@@ -332,10 +334,10 @@ fn main() {
 
     writeln!(
         &mut file,
-        "{}{}{}",
-        const_declaration!(pub(crate) FACTOR_TYPE_F = FACTOR_TYPE_F),
-        const_declaration!(pub(crate) FACTOR_TYPE_Q = FACTOR_TYPE_Q),
-        const_declaration!(pub(crate) FACTOR_TYPE_C = FACTOR_TYPE_C),
+        "{}\n{}\n{}",
+        static_declaration!(pub(crate) FACTOR_TYPE_F = FACTOR_TYPE_F),
+        static_declaration!(pub(crate) FACTOR_TYPE_Q = FACTOR_TYPE_Q),
+        static_declaration!(pub(crate) FACTOR_TYPE_C = FACTOR_TYPE_C),
     )
     .unwrap();
 
@@ -391,6 +393,15 @@ fn main() {
                 .to_string()
             )
             .entry(
+                "med",
+                &quote!(Factor::MultipleValue {
+                    name: "Medikation",
+                    types: &[&FACTOR_TYPE_C],
+                    tag: "med"
+                })
+                .to_string()
+            )
+            .entry(
                 "w",
                 &quote!(Factor::SingleValue {
                     name: "Wetter",
@@ -438,7 +449,7 @@ fn main() {
                     unnamed: {
                         let mut unnamed = syn::punctuated::Punctuated::new();
                         unnamed.push(syn::Field {
-                            attrs: vec![],
+                            attrs: vec![parse_quote! {#[enum_alias(mood_data)]}],
                             vis: syn::Visibility::Inherited,
                             mutability: syn::FieldMutability::None,
                             ident: None,
@@ -452,9 +463,10 @@ fn main() {
             });
 
     let mood_enum_tokens = quote! {
-        #[derive( PartialEq, Debug, Clone, PartialOrd, Copy, ::enum_kinds::EnumKind)]
+        #[derive(PartialEq, Debug, Clone, PartialOrd, Copy, ::enum_access::EnumAccess, ::enum_kinds::EnumKind)]
         #[enum_kind(#mood_enum_kind_ident)]
         #[non_exhaustive]
+        #[enum_access(get(mood_data = "pub"))]
         pub enum #mood_enum_ident {
             #(#mood_enum_variants_tokens2),*
         }
@@ -473,7 +485,7 @@ fn main() {
     writeln!(
         &mut file,
         "{}",
-        const_declaration!(pub(crate) ACTIVITIES_MAP = activities_map)
+        static_declaration!(pub(crate) ACTIVITIES_MAP = activities_map)
     )
     .unwrap();
 

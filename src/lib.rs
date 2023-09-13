@@ -1,9 +1,7 @@
 use crate::consts::{
-    TimeBlock, ACTIVITIES_MAP, FACTOR_TAG_RE, LAST_MOMENT_OF_THE_DAY, SLEEP_ACTIVITY,
-    TIME_OF_DAY_INTERVALS,
+    TimeBlock, FACTOR_TAG_RE, LAST_MOMENT_OF_THE_DAY, SLEEP_ACTIVITY, TIME_OF_DAY_INTERVALS,
 };
-use polars::export::rayon::iter::IntoParallelRefIterator;
-use polars::export::rayon::prelude::ParallelIterator;
+use polars::export::rayon::prelude::*;
 use polars::prelude::*;
 use polars::series::ops::NullBehavior;
 use std::collections::HashMap;
@@ -18,62 +16,6 @@ pub use crate::consts::{
     Factor, FactorType, Mood, MoodData, FACTORS, FACTOR_TYPES, MOOD_2_MOOD_ENUM,
 };
 
-//
-// trait MapSafeAccessorExt<K, V, T> {
-//     fn get_safe(&self, key: T) -> Option<&V>;
-// }
-//
-// impl<K: 'static, V: 'static, T> MapSafeAccessorExt<K, V, &T> for phf::Map<K, V>
-// where
-//     T: Eq + phf::PhfHash + ?Sized,
-//     K: phf_shared::PhfBorrow<T>,
-// {
-//     fn get_safe(&self, key: &T) -> Option<&V> {
-//         self.get(key)
-//     }
-// }
-//
-// impl<K, V, T, S> MapSafeAccessorExt<K, V, &T> for HashMap<K, V, S>
-// where
-//     T: Hash + Eq + ?Sized,
-//     K: Hash + Eq + Borrow<T>,
-//     S: BuildHasher,
-// {
-//     fn get_safe(&self, key: &T) -> Option<&V> {
-//         self.get(key)
-//     }
-// }
-//
-// trait ExprExtension {
-//     fn remap_categories<'a, V, T, M>(self, output_dtype: Option<DataType>, map: &M) -> Self
-//     where
-//         M: MapSafeAccessorExt<&'a str, V, &'a str>,
-//         V: Clone;
-// }
-//
-// impl ExprExtension for Expr {
-//     fn remap_categories<'a, V, T, M, I>(self, output_dtype: Option<DataType>, map: &M) -> Self
-//     where
-//         M: MapSafeAccessorExt<&'a str, V, &'a str>,
-//         I: IntoIterator<Item = V> + IntoSeries,
-//         V: Clone + From<I::Item>,
-//     {
-//         self.map(
-//             |series| {
-//                 Ok(Some(
-//                     series
-//                         .categorical()
-//                         .expect("series was not an categorical dtype")
-//                         .iter_str()
-//                         .flat_map(|val| val.map(|val| map.get_safe(val).cloned()))
-//                         .collect(),
-//                 ))
-//             },
-//             output_dtype.map_or(GetOutput::same_type(), |t| GetOutput::from_type(t)),
-//         )
-//     }
-// }
-
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -82,42 +24,29 @@ pub enum ProcessError {
     Polars(#[from] PolarsError),
     #[error(transparent)]
     Io(#[from] std::io::Error),
-    #[error("unknown data store error")]
+    #[error("unknown processing error")]
     Unknown,
 }
 
 fn factor_column_name(factor: &Factor, factor_type: &FactorType) -> String {
-    let name = factor.name();
-    let factor_type_name = factor_type.name().unwrap_or("");
+    let tag = factor.tag();
+    let factor_type_tag = factor_type.tag();
 
-    let supplement = if factor.tag() == "sl" && factor_type.tag() == "f" {
-        " (Dauer)"
-    } else {
-        ""
-    };
-
-    let mut s = format!("{name} {factor_type_name} {supplement}");
+    let mut s = format!("factor_{tag}_{factor_type_tag}");
     s.truncate(s.trim_end().len());
     s
 }
 
-// fn factor_column_name(factor: &Factor, factor_type: &FactorType) -> String {
-//     let tag = factor.tag();
-//     let factor_type_tag = factor_type.tag();
-//
-//     let mut s = format!("factor_{tag}_{factor_type_tag}");
-//     s.truncate(s.trim_end().len());
-//     s
-// }
-
-pub struct ProcessedDaylioData {
+#[derive(Clone)]
+pub struct ProcessedData {
     pub dataframe: LazyFrame,
     pub factors: HashMap<String, Vec<String>>,
     pub activities: Vec<String>,
 }
 
-pub fn process(lf1: LazyFrame) -> Result<ProcessedDaylioData, ProcessError> {
+pub fn process(lf1: LazyFrame) -> Result<ProcessedData, ProcessError> {
     let lf1 = lf1
+        .with_comm_subexpr_elim(true)
         .with_columns([
             // activities
             col("activities")
@@ -133,45 +62,45 @@ pub fn process(lf1: LazyFrame) -> Result<ProcessedDaylioData, ProcessError> {
             col("activities")
                 .list()
                 .eval(
+                    col("").filter(
+                        col("")
+                            .str()
+                            .starts_with(lit("<"))
+                            .and(col("").str().contains(lit(FACTOR_TAG_RE), false)),
+                    ),
+                    true,
+                )
+                .list()
+                .eval(
                     col("")
-                        .filter(col("").str().contains(lit(FACTOR_TAG_RE), false))
                         .str()
                         .extract_groups(FACTOR_TAG_RE)
                         .expect("Regex is valid"),
                     true,
                 )
                 .alias("matched_factors"),
-            col("activities")
-                .list()
-                .eval(
-                    col("").filter(col("").str().contains(lit(FACTOR_TAG_RE), false).not()),
-                    true,
-                )
-                .list()
-                .eval(
+            col("activities").list().eval(
+                col("").filter(
                     col("")
-                        .map(
-                            |v| {
-                                Ok(v.utf8()
-                                    .expect("series was not an utf8 dtype")
-                                    .into_iter()
-                                    .map(|val| {
-                                        val.map(|v| ACTIVITIES_MAP.get(v).map_or("", |&x| x))
-                                    })
-                                    .collect())
-                            },
-                            GetOutput::from_type(DataType::Utf8),
-                        )
-                        .filter(col("").neq(lit(""))),
-                    true,
+                        .str()
+                        .starts_with(lit("<"))
+                        .not()
+                        .and(col("").str().contains(lit(FACTOR_TAG_RE), false).not()),
                 ),
+                true,
+            ),
         ])
+        .cache();
+
+    let lf_for_activities = lf1.clone();
+
+    let lf1 = lf1
         .with_columns(
             FACTORS
                 .into_iter()
                 .flat_map(|(&factor_tag, factor)| {
-                    factor.types().iter().map(move |factor_type| {
-                        let factor_type_tag = factor_type.tag();
+                    factor.types().iter().map(move |&factor_type| {
+                        let factor_type_tag = *factor_type.tag();
 
                         let list_eval = match factor_type {
                             FactorType::Scale { .. } => col("")
@@ -223,22 +152,27 @@ pub fn process(lf1: LazyFrame) -> Result<ProcessedDaylioData, ProcessError> {
         )
         .cache();
 
-    let lf_for_activities = lf1.clone();
+    let lf_for_factors = lf1.clone();
 
     let lf1 = lf1
-        .select([
+        .with_columns([
             col("time").str().to_time(StrptimeOptions {
                 format: Some("%R".to_string()),
                 ..Default::default()
             }),
-            col("*").exclude(["time", "weekday", "date", "note_title"]),
-        ])
-        .with_columns([
             col("full_date").str().to_date(StrptimeOptions {
                 format: Some("%F".to_string()),
                 ..Default::default()
             }),
             col("mood").cast(DataType::Categorical(None)),
+            //
+            when(col("activities").list().contains(lit(SLEEP_ACTIVITY)))
+                .then(lit(true))
+                .otherwise(lit(false))
+                .alias("is_sleep_entry"),
+            col("activities").list().lengths().alias("activities_count"),
+            col("activities").shift(-1).alias("activities_previous"),
+            col("activities").shift(1).alias("activities_next"),
         ])
         .with_columns([
             // date stuff
@@ -264,11 +198,6 @@ pub fn process(lf1: LazyFrame) -> Result<ProcessedDaylioData, ProcessError> {
                 .strftime("%H.%M")
                 .cast(DataType::Float32)
                 .alias("time_numeric"),
-            //
-            when(col("activities").list().contains(lit(SLEEP_ACTIVITY)))
-                .then(lit(true))
-                .otherwise(lit(false))
-                .alias("is_sleep_entry"),
             // mood
             col("mood")
                 .map(
@@ -288,21 +217,6 @@ pub fn process(lf1: LazyFrame) -> Result<ProcessedDaylioData, ProcessError> {
                     GetOutput::from_type(DataType::UInt8),
                 )
                 .alias("mood_level"),
-        ])
-        .sort(
-            "full_datetime",
-            SortOptions {
-                descending: false,
-                multithreaded: true,
-                ..Default::default()
-            },
-        )
-        .with_row_count("id", Some(1))
-        .with_columns([
-            col("activities").shift(1).alias("activities_previous"),
-            col("activities").shift(-1).alias("activities_next"),
-        ])
-        .with_columns([
             col("activities").cast(DataType::List(Box::new(DataType::Categorical(None)))),
             col("activities_previous").cast(DataType::List(Box::new(DataType::Categorical(None)))),
             col("activities_next").cast(DataType::List(Box::new(DataType::Categorical(None)))),
@@ -334,7 +248,6 @@ pub fn process(lf1: LazyFrame) -> Result<ProcessedDaylioData, ProcessError> {
                 .unique()
                 .cast(DataType::List(Box::new(DataType::Categorical(None))))
                 .alias("diff_activities_with_next"),
-            col("activities").list().lengths().alias("activities_count"),
         ])
         .with_columns({
             let mood_improvement_col = when(col("is_sleep_entry"))
@@ -387,9 +300,9 @@ pub fn process(lf1: LazyFrame) -> Result<ProcessedDaylioData, ProcessError> {
                         .alias("mood_level_improvement_raw"),
                     mood_improvement_col
                         .clone()
-                        .shift(-1)
+                        .shift(1)
                         .alias("mood_level_improvement_next_raw"),
-                    col("mood_level").shift(1).alias("mood_level_previous"),
+                    col("mood_level").shift(-1).alias("mood_level_previous"),
                     //
                     col("common_activities_with_previous")
                         .list()
@@ -454,14 +367,6 @@ pub fn process(lf1: LazyFrame) -> Result<ProcessedDaylioData, ProcessError> {
                 ])
                 .collect::<Vec<_>>()
         })
-        .with_columns([when(
-            col("logical_date_stage_1")
-                .neq_missing(col("full_date"))
-                .and(col("time_numeric").gt_eq(lit(5.0))),
-        )
-        .then(col("full_date"))
-        .otherwise(NULL.lit())
-        .alias("logical_date_stage_2")])
         .with_columns([
             when(col("is_sleep_entry"))
                 .then(lit(0))
@@ -475,38 +380,6 @@ pub fn process(lf1: LazyFrame) -> Result<ProcessedDaylioData, ProcessError> {
                     .otherwise(lit(0)),
                 )
                 .alias("mood_level_improvement_boost"),
-            // logical date
-            col("logical_date_stage_1")
-                .fill_null(col("logical_date_stage_2"))
-                .forward_fill(None)
-                .backward_fill(None)
-                .alias("logical_date"),
-        ])
-        .with_columns([when(col("logical_date").neq(col("full_date")))
-            .then((col("id") + lit(LAST_MOMENT_OF_THE_DAY)).cast(DataType::Time))
-            .otherwise(col("time"))
-            .alias("logical_time")])
-        .with_columns([
-            (col("mood_level_improvement_raw") + col("mood_level_improvement_boost"))
-                .alias("mood_level_improvement_raw_with_boost"),
-            (col("logical_date").cast(DataType::Utf8)
-                + lit(" ")
-                + col("logical_time").cast(DataType::Utf8))
-            .str()
-            .to_datetime(
-                Some(TimeUnit::Milliseconds),
-                None,
-                StrptimeOptions {
-                    format: Some("%F %T%.f".to_string()),
-                    cache: false,
-                    exact: false,
-                    strict: false,
-                    ..Default::default()
-                },
-            )
-            .alias("logical_full_datetime"),
-        ])
-        .with_columns([
             // moodlevel improbvement
             col("mood_level_improvement_previous_raw")
                 .sign()
@@ -516,16 +389,20 @@ pub fn process(lf1: LazyFrame) -> Result<ProcessedDaylioData, ProcessError> {
                 .sign()
                 .cast(DataType::Int8)
                 .alias("mood_level_improvement"),
-            col("mood_level_improvement_raw_with_boost")
-                .sign()
-                .cast(DataType::Int8)
-                .alias("mood_level_improvement_with_boost"),
             col("mood_level_improvement_next_raw")
                 .sign()
                 .cast(DataType::Int8)
                 .alias("mood_level_improvement_next"),
         ])
         .with_columns([
+            (col("mood_level_improvement_raw") + col("mood_level_improvement_boost"))
+                .alias("mood_level_improvement_raw_with_boost"),
+        ])
+        .with_columns([
+            col("mood_level_improvement_raw_with_boost")
+                .sign()
+                .cast(DataType::Int8)
+                .alias("mood_level_improvement_with_boost"),
             when(col("is_sleep_entry"))
                 .then(lit(0))
                 .otherwise(
@@ -539,25 +416,69 @@ pub fn process(lf1: LazyFrame) -> Result<ProcessedDaylioData, ProcessError> {
                     .div(lit(8)),
                 )
                 .alias("mood_level_improvement_moving_average_raw"),
-            when(col("is_sleep_entry"))
-                .then(lit(0))
-                .otherwise(
-                    ((lit(-1)
-                        * col("mood_level_improvement_previous")
-                        * col("common_activities_with_previous_factor"))
-                        + (col("mood_level_improvement_with_boost") * lit(5))
-                        + (col("mood_level_improvement_next")
-                            * col("common_activities_with_next_factor")
-                            * lit(2)))
-                    .div(lit(8)),
-                )
-                .alias("mood_level_improvement_moving_average"),
         ])
-        .select([col("*").exclude(["logical_date_stage_1", "logical_date_stage_2"])])
-        .cache();
+        .with_columns([when(col("is_sleep_entry"))
+            .then(lit(0))
+            .otherwise(
+                ((lit(-1)
+                    * col("mood_level_improvement_previous")
+                    * col("common_activities_with_previous_factor"))
+                    + (col("mood_level_improvement_with_boost") * lit(5))
+                    + (col("mood_level_improvement_next")
+                        * col("common_activities_with_next_factor")
+                        * lit(2)))
+                .div(lit(8)),
+            )
+            .alias("mood_level_improvement_moving_average")])
+        .sort(
+            "full_datetime",
+            SortOptions {
+                descending: false,
+                multithreaded: true,
+                ..Default::default()
+            },
+        )
+        .with_columns([when(
+            col("logical_date_stage_1")
+                .neq_missing(col("full_date"))
+                .and(col("time_numeric").gt_eq(lit(5.0))),
+        )
+        .then(col("full_date"))
+        .otherwise(NULL.lit())
+        .alias("logical_date_stage_2")])
+        .with_columns([
+            // logical date
+            col("logical_date_stage_1")
+                .fill_null(col("logical_date_stage_2"))
+                .forward_fill(None)
+                .backward_fill(None)
+                .alias("logical_date"),
+        ])
+        .with_row_count("id", Some(1))
+        .with_columns([when(col("logical_date").neq(col("full_date")))
+            .then((col("id") + lit(LAST_MOMENT_OF_THE_DAY)).cast(DataType::Time))
+            .otherwise(col("time"))
+            .alias("logical_time")])
+        .with_columns([(col("logical_date").cast(DataType::Utf8)
+            + lit(" ")
+            + col("logical_time").cast(DataType::Utf8))
+        .str()
+        .to_datetime(
+            Some(TimeUnit::Milliseconds),
+            None,
+            StrptimeOptions {
+                format: Some("%F %T%.f".to_string()),
+                cache: false,
+                exact: false,
+                strict: false,
+                ..Default::default()
+            },
+        )
+        .alias("logical_full_datetime")]);
 
     let activities = lf_for_activities
         .clone()
+        .select([col("activities")])
         .groupby([lit("")])
         .agg([col("activities")
             .cast(DataType::List(Box::new(DataType::Utf8)))
@@ -566,8 +487,6 @@ pub fn process(lf1: LazyFrame) -> Result<ProcessedDaylioData, ProcessError> {
             .drop_nulls()])
         .select([col("activities").explode()])
         .collect()?;
-
-    // println!("{activities:#?}");
 
     let activities2 = activities.clone();
     let activities2 = activities2
@@ -579,7 +498,7 @@ pub fn process(lf1: LazyFrame) -> Result<ProcessedDaylioData, ProcessError> {
     let activities2 = activities2.collect::<Vec<_>>();
 
     let factor_col_names = FACTORS.values().flat_map(|factor| {
-        factor.types().iter().map(move |factor_type| {
+        factor.types().iter().map(move |&factor_type| {
             (
                 factor_column_name(factor, factor_type),
                 matches!(factor, Factor::MultipleValue { .. }),
@@ -588,7 +507,7 @@ pub fn process(lf1: LazyFrame) -> Result<ProcessedDaylioData, ProcessError> {
         })
     });
 
-    let factors = lf_for_activities
+    let factors = lf_for_factors
         .clone()
         .select(
             factor_col_names
@@ -641,8 +560,6 @@ pub fn process(lf1: LazyFrame) -> Result<ProcessedDaylioData, ProcessError> {
         .flatten()
         .collect::<HashMap<_, _>>();
 
-    println!("{factors2:#?}");
-
     let fixed_col_order = [
         "id",
         "full_date",
@@ -680,7 +597,7 @@ pub fn process(lf1: LazyFrame) -> Result<ProcessedDaylioData, ProcessError> {
         factor
             .types()
             .iter()
-            .map(move |factor_type| factor_column_name(factor, factor_type))
+            .map(move |&factor_type| factor_column_name(factor, factor_type))
     }))
     .chain(
         factors2
@@ -733,9 +650,6 @@ pub fn process(lf1: LazyFrame) -> Result<ProcessedDaylioData, ProcessError> {
     )
     .chain(activities2.clone().into_iter().map(String::from));
 
-    // todo excluded activities
-    // todo filtered activities
-    // todo meta activities
     let lf1 = lf1
         .with_columns(
             activities2
@@ -773,12 +687,18 @@ pub fn process(lf1: LazyFrame) -> Result<ProcessedDaylioData, ProcessError> {
             fixed_col_order
                 .clone()
                 .map(|col_name| col(&col_name))
-                .chain([col("*").exclude(fixed_col_order.chain(["matched_factors".to_string()]))])
+                .chain([col("*").exclude(fixed_col_order.chain([
+                    "matched_factors".to_string(),
+                    "logical_date_stage_1".to_string(),
+                    "logical_date_stage_2".to_string(),
+                    "weekday".to_string(),
+                    "date".to_string(),
+                    "note_title".to_string(),
+                ]))])
                 .collect::<Vec<_>>(),
-        )
-        .cache();
+        );
 
-    Ok(ProcessedDaylioData {
+    Ok(ProcessedData {
         dataframe: lf1,
         factors: factors2,
         activities: activities2,

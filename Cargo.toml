@@ -13,10 +13,10 @@ csv = ["polars/csv"]
 
 [dependencies]
 phf = { version = "^0.11", features = ["macros"] }
-const-gen = { version = "^1.4.1" }
+const-gen = { version = "^1.5" }
 thiserror = "^1.0.48"
 enum-kinds = "^0.5.1"
-enum_access = "^0.4.0"
+enum_access = { version = "^0.4.0", git = "https://github.com/kije/enum_access.git" }
 # impl-enum = "^0.3.0"
 
 
@@ -49,7 +49,8 @@ features = [
     "dtype-categorical",
     "dtype-struct",
     "lazy_regex",
-    "list_sets"
+    "list_sets",
+    "streaming"
 ]
 
 [build-dependencies]
@@ -58,7 +59,7 @@ phf_codegen = "^0.11"
 syn = { version = "^2.0", features = ["full"] }
 quote = "^1.0"
 proc-macro2 = "^1.0"
-const-gen = { version = "1.4.1" }
+const-gen = { version = "^1.5" }
 
 [profile.release]
 codegen-units = 1

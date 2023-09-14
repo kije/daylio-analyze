@@ -13,7 +13,7 @@ pub fn main() -> Result<(), ProcessError> {
 
     let lf1 = process(lf1)?;
 
-    let lfp = lf1.dataframe.clone().profile()?;
+    let lfp = lf1.dataframe.clone().collect()?;
 
     println!("{:#?}", lfp);
 

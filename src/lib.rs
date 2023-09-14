@@ -175,8 +175,6 @@ fn process_factors(lf: LazyFrame) -> Result<(Vec<FactorColumn>, ColumnExprIter),
         .flatten()
         .collect::<HashMap<_, Vec<_>>>();
 
-    println!("{:#?}", factors);
-
     let factors_columns = factor_col_names
         .map(|mut c| {
             c.values = factors.get(c.column_name.as_ref()).and_then(|x| {
@@ -238,6 +236,7 @@ fn check_schema(lf: LazyFrame) -> Result<LazyFrame, ProcessError> {
     if !schema.contains("full_date")
         || !schema.contains("time")
         || !schema.contains("activities")
+        || !schema.contains("note")
         || schema.get("full_date").unwrap() != &DataType::Utf8
         || schema.get("time").unwrap() != &DataType::Utf8
         || schema.get("activities").unwrap() != &DataType::Utf8
@@ -792,4 +791,74 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
         factors,
         activities,
     })
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_process_simple_dataframe() {
+        let df = DataFrame::new(vec![
+            Series::new(
+                "full_date",
+                &[
+                    "2021-01-04",
+                    "2021-01-04",
+                    "2021-01-03",
+                    "2021-01-03",
+                    "2021-01-02",
+                    "2021-01-02",
+                    "2021-01-01",
+                ],
+            ),
+            Series::new(
+                "time",
+                &[
+                    "00:00", "12:00", "18:00", "19:00", "03:00", "12:00", "19:00",
+                ],
+            ),
+            Series::new(
+                "activities",
+                &[
+                    "foo",
+                    "",
+                    "bar | baz",
+                    "foo | baz",
+                    "",
+                    SLEEP_ACTIVITY,
+                    "foo | <c_e> sad | <f_sl100> good",
+                ],
+            ),
+            Series::new("mood", &["1", "1", "2", "3", "2", "6", "5"]),
+            Series::new("note", &["", "", "", "", "", "", ""]),
+        ])
+        .unwrap();
+
+        let result = process(df.lazy()).unwrap();
+
+        assert_eq!(
+            result.factors.len(),
+            FACTORS.values().flat_map(|f| f.types().iter()).count()
+        );
+
+        let expected_activities = ["foo", "bar", "baz", SLEEP_ACTIVITY].map(ColumnName::from);
+
+        assert!(expected_activities
+            .iter()
+            .all(|item| result.activities.values.contains(item)));
+        assert!(result
+            .activities
+            .values
+            .iter()
+            .all(|item| expected_activities.contains(item)));
+
+        let df_processed = result.dataframe.collect().unwrap();
+
+        assert_eq!(df_processed.shape(), (7, 59));
+
+        println!("{:#?}", df_processed);
+
+        // todo test more
+    }
 }

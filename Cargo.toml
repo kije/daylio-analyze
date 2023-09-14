@@ -5,10 +5,11 @@ edition = "2021"
 authors = ["Kim D. Jeker <git@kije.ch>"]
 
 [features]
-default = ["debug"]
-debug = ["fmt", "csv"]
+default = ["debug", "csv"]
+debug = ["fmt"]
 fmt = ["polars/fmt"]
 csv = ["polars/csv"]
+avx512 = ["polars/avx512"]
 
 
 [dependencies]
@@ -27,13 +28,11 @@ features = [
     "temporal",
     "async",
     "simd",
-    "avx512",
     "performant",
     "lazy",
     "strings",
     "cse",
     "concat_str",
-    "abs",
     "checked_arithmetic",
     "diff",
     "ndarray",

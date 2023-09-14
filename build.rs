@@ -1,5 +1,3 @@
-use proc_macro2::Span;
-use quote::quote;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::env;
@@ -9,6 +7,8 @@ use std::path::Path;
 use std::string::ToString;
 
 use const_gen::*;
+use proc_macro2::Span;
+use quote::quote;
 use syn::parse_quote;
 
 #[derive(CompileConst)]
@@ -298,17 +298,17 @@ fn main() {
         "{}",
         const_definition!(#[derive(PartialEq, PartialOrd, Debug, Clone, Copy)] #[non_exhaustive] pub(crate) TimeBlock)
     )
-    .unwrap();
+        .unwrap();
 
     writeln!(
         &mut file,
         "{}",
-        static_declaration!(pub(crate) TIME_OF_DAY_INTERVALS = time_blocks)
+        const_declaration!(pub(crate) TIME_OF_DAY_INTERVALS = time_blocks)
     )
     .unwrap();
 
     writeln!(
-        &mut file, "{}", 
+        &mut file, "{}",
         const_definition!(#[derive(Hash, Eq, PartialEq, Debug, Clone, Copy, ::enum_access::EnumAccess)] #[non_exhaustive] #[enum_access(get(tag = "pub", name = "pub"))]  pub FactorType)
     ).unwrap();
 
@@ -317,7 +317,7 @@ fn main() {
         "{}",
         const_definition!(#[derive(Hash, Eq, PartialEq, Debug, Clone, Copy, ::enum_access::EnumAccess)] #[enum_access(get(name = "pub", tag = "pub", types = "pub"))]  pub  Factor)
     )
-    .unwrap();
+        .unwrap();
 
     static FACTOR_TYPE_F: FactorType = FactorType::Scale {
         name: None,
@@ -335,15 +335,15 @@ fn main() {
     writeln!(
         &mut file,
         "{}\n{}\n{}",
-        static_declaration!(pub(crate) FACTOR_TYPE_F = FACTOR_TYPE_F),
-        static_declaration!(pub(crate) FACTOR_TYPE_Q = FACTOR_TYPE_Q),
-        static_declaration!(pub(crate) FACTOR_TYPE_C = FACTOR_TYPE_C),
+        const_declaration!(pub(crate) FACTOR_TYPE_F = FACTOR_TYPE_F),
+        const_declaration!(pub(crate) FACTOR_TYPE_Q = FACTOR_TYPE_Q),
+        const_declaration!(pub(crate) FACTOR_TYPE_C = FACTOR_TYPE_C),
     )
     .unwrap();
 
     writeln!(
         &mut file,
-        "pub static FACTOR_TYPES: ::phf::Map<&'static str, &'static FactorType> = {};",
+        "pub const FACTOR_TYPES: ::phf::Map<&'static str, &'static FactorType> = {};",
         phf_codegen::Map::new()
             .entry("f", "&FACTOR_TYPE_F")
             .entry("q", "&FACTOR_TYPE_Q")
@@ -354,7 +354,7 @@ fn main() {
 
     writeln!(
         &mut file,
-        "pub static FACTORS: ::phf::Map<&'static str, Factor> = {};",
+        "pub const FACTORS: ::phf::Map<&'static str, Factor> = {};",
         phf_codegen::Map::new()
             .entry(
                 "sl",
@@ -363,7 +363,7 @@ fn main() {
                     types: &[&FACTOR_TYPE_F, &FACTOR_TYPE_Q],
                     tag: "sl"
                 })
-                .to_string()
+                .to_string(),
             )
             .entry(
                 "f",
@@ -372,7 +372,7 @@ fn main() {
                     types: &[&FACTOR_TYPE_C],
                     tag: "f"
                 })
-                .to_string()
+                .to_string(),
             )
             .entry(
                 "st",
@@ -381,7 +381,7 @@ fn main() {
                     types: &[&FACTOR_TYPE_F],
                     tag: "st"
                 })
-                .to_string()
+                .to_string(),
             )
             .entry(
                 "e",
@@ -390,7 +390,7 @@ fn main() {
                     types: &[&FACTOR_TYPE_C],
                     tag: "e"
                 })
-                .to_string()
+                .to_string(),
             )
             .entry(
                 "med",
@@ -399,7 +399,7 @@ fn main() {
                     types: &[&FACTOR_TYPE_C],
                     tag: "med"
                 })
-                .to_string()
+                .to_string(),
             )
             .entry(
                 "w",
@@ -408,7 +408,7 @@ fn main() {
                     types: &[&FACTOR_TYPE_C],
                     tag: "w"
                 })
-                .to_string()
+                .to_string(),
             )
             .entry(
                 "sy",
@@ -417,13 +417,13 @@ fn main() {
                     types: &[&FACTOR_TYPE_C],
                     tag: "sy"
                 })
-                .to_string()
+                .to_string(),
             )
             .build()
     )
     .unwrap();
 
-    writeln!(&mut file, "{}", const_definition!(#[derive(PartialEq, PartialOrd, Debug, Clone, Copy)] #[non_exhaustive] pub  MoodData)).unwrap();
+    writeln!(&mut file, "{}", const_definition!(#[derive(Default, PartialEq, PartialOrd, Debug, Clone, Copy)] #[non_exhaustive] pub  MoodData)).unwrap();
 
     let mood_enum_variants_tokens = BASE_MOODS
         .iter()
@@ -485,7 +485,7 @@ fn main() {
     writeln!(
         &mut file,
         "{}",
-        static_declaration!(pub(crate) ACTIVITIES_MAP = activities_map)
+        static_declaration!(pub ACTIVITIES_MAP = activities_map)
     )
     .unwrap();
 

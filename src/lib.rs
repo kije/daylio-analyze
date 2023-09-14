@@ -1,22 +1,20 @@
-use crate::consts::{
-    TimeBlock, FACTOR_TAG_RE, LAST_MOMENT_OF_THE_DAY, SLEEP_ACTIVITY, TIME_OF_DAY_INTERVALS,
-};
-use polars::export::rayon::prelude::*;
-use polars::prelude::*;
-use polars::series::ops::NullBehavior;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ops::Div;
 
-#[macro_use]
-extern crate enum_access;
-
-pub(crate) mod consts;
+use polars::export::rayon::prelude::*;
+use polars::prelude::*;
+use polars::series::ops::NullBehavior;
+use thiserror::Error;
 
 pub use crate::consts::{
-    Factor, FactorType, Mood, MoodData, FACTORS, FACTOR_TYPES, MOOD_2_MOOD_ENUM,
+    Factor, FactorType, Mood, MoodData, ACTIVITIES_MAP, FACTORS, FACTOR_TYPES, MOOD_2_MOOD_ENUM,
+};
+use crate::consts::{
+    TimeBlock, FACTOR_TAG_RE, LAST_MOMENT_OF_THE_DAY, SLEEP_ACTIVITY, TIME_OF_DAY_INTERVALS,
 };
 
-use thiserror::Error;
+pub(crate) mod consts;
 
 #[derive(Error, Debug)]
 pub enum ProcessError {
@@ -24,28 +22,243 @@ pub enum ProcessError {
     Polars(#[from] PolarsError),
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error("schema mismatch")]
+    SchemaMismatch,
     #[error("unknown processing error")]
     Unknown,
 }
 
-fn factor_column_name(factor: &Factor, factor_type: &FactorType) -> String {
+type ColumnName = Cow<'static, str>;
+
+type ActivityValue = Cow<'static, str>;
+
+#[derive(Clone, Debug)]
+pub struct ActivityColumn {
+    pub column_name: ColumnName,
+    pub values: Vec<ActivityValue>,
+    pub binary_columns: HashMap<ActivityValue, ColumnName>,
+}
+
+type ColumnExprIter = Box<dyn Iterator<Item = Expr>>;
+
+#[inline]
+fn process_activities(lf: LazyFrame) -> Result<(ActivityColumn, ColumnExprIter), ProcessError> {
+    let activities = lf
+        .select([col("activities")])
+        .groupby([lit("")])
+        .agg([col("activities")
+            .cast(DataType::List(Box::new(DataType::Utf8)))
+            .flatten()
+            .unique()
+            .drop_nulls()])
+        .select([col("activities").explode()])
+        .collect()?;
+
+    let activities = activities
+        .column("activities")?
+        .utf8()?
+        .par_iter_indexed()
+        .flatten()
+        .map(String::from);
+
+    let activities = activities.map(ColumnName::from).collect::<Vec<_>>();
+
+    let activities_binary_columns = activities.clone().into_iter().map(|activity| {
+        col("activities")
+            .alias(&activity)
+            .list()
+            .contains(activity.lit())
+    });
+
+    Ok((
+        ActivityColumn {
+            column_name: ColumnName::from("activities"),
+            binary_columns: activities.iter().map(|a| (a.clone(), a.clone())).collect(),
+            values: activities,
+        },
+        Box::new(activities_binary_columns),
+    ))
+}
+
+type FactorValue = Cow<'static, str>;
+
+#[derive(Clone, Debug)]
+pub struct FactorColumn {
+    pub factor: &'static Factor,
+    pub factor_type: &'static FactorType,
+    pub column_name: ColumnName,
+    pub values: Option<Vec<FactorValue>>,
+    pub binary_columns: Option<HashMap<FactorValue, ColumnName>>,
+}
+
+impl FactorColumn {
+    pub const fn is_multiple(&self) -> bool {
+        matches!(self.factor, Factor::MultipleValue { .. })
+    }
+
+    pub const fn is_categorical(&self) -> bool {
+        matches!(self.factor_type, FactorType::Taxonomy { .. })
+    }
+}
+
+#[inline]
+fn factor_column_name(factor: &Factor, factor_type: &FactorType) -> ColumnName {
     let tag = factor.tag();
     let factor_type_tag = factor_type.tag();
 
-    let mut s = format!("factor_{tag}_{factor_type_tag}");
+    let mut s = format!("factor_{factor_type_tag}_{tag}");
     s.truncate(s.trim_end().len());
-    s
+    ColumnName::from(s)
+}
+
+#[inline]
+fn process_factors(lf: LazyFrame) -> Result<(Vec<FactorColumn>, ColumnExprIter), ProcessError> {
+    let factor_col_names = FACTORS.values().flat_map(|factor| {
+        factor.types().iter().map(move |&factor_type| FactorColumn {
+            factor,
+            factor_type,
+            column_name: factor_column_name(factor, factor_type),
+            values: None,
+            binary_columns: None,
+        })
+    });
+
+    let factors_df = lf
+        .select(
+            factor_col_names
+                .clone()
+                .map(|c| {
+                    if c.is_categorical() {
+                        if c.is_multiple() {
+                            col(&c.column_name).cast(DataType::List(Box::new(DataType::Utf8)))
+                        } else {
+                            col(&c.column_name).cast(DataType::Utf8)
+                        }
+                    } else {
+                        col(&c.column_name)
+                    }
+                })
+                .collect::<Vec<_>>(),
+        )
+        .groupby([lit("").alias("group")])
+        .agg(
+            factor_col_names
+                .clone()
+                .filter_map(|c| {
+                    if c.is_categorical() {
+                        Some(col(&c.column_name).flatten().unique().drop_nulls())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>(),
+        )
+        .select([col("*").exclude(["group"])])
+        .collect()?;
+
+    let factors = factors_df
+        .iter()
+        .flat_map(|s| {
+            s.list().unwrap().into_iter().map(|x| {
+                x.map(|x| {
+                    (
+                        ColumnName::from(s.name().to_string()),
+                        x.utf8()
+                            .unwrap()
+                            .par_iter()
+                            .filter_map(|x| x.map(|x| FactorValue::from(x.to_string())))
+                            .collect::<Vec<_>>(),
+                    )
+                })
+            })
+        })
+        .flatten()
+        .collect::<HashMap<_, Vec<_>>>();
+
+    println!("{:#?}", factors);
+
+    let factors_columns = factor_col_names
+        .map(|mut c| {
+            c.values = factors.get(c.column_name.as_ref()).and_then(|x| {
+                if x.is_empty() {
+                    None
+                } else {
+                    Some(x.to_owned())
+                }
+            });
+            c.binary_columns = c.values.clone().map(|values| {
+                values
+                    .par_iter()
+                    .map(|v| {
+                        (
+                            v.clone(),
+                            ColumnName::from(format!("{}: {}", c.column_name, v)),
+                        )
+                    })
+                    .collect::<HashMap<_, _>>()
+            });
+
+            c
+        })
+        .collect::<Vec<_>>();
+
+    let factors_columns_iterator = factors_columns
+        .clone()
+        .into_iter()
+        .flat_map(|factor_col| {
+            let column_name = factor_col.column_name.clone();
+            let is_categorical = (factor_col).is_categorical();
+            let is_multiple = (factor_col).is_multiple();
+            factor_col.binary_columns.map(move |binary_columns| {
+                binary_columns.into_iter().map(move |(v, c)| {
+                    if is_categorical {
+                        if is_multiple {
+                            col(&column_name).list().contains(v.lit())
+                        } else {
+                            when(col(&column_name).is_null())
+                                .then(lit(false))
+                                .otherwise(col(&column_name).eq(v.lit()))
+                        }
+                    } else {
+                        col(&column_name)
+                    }
+                    .alias(&c)
+                })
+            })
+        })
+        .flatten();
+
+    Ok((factors_columns, Box::new(factors_columns_iterator)))
+}
+
+#[inline]
+fn check_schema(lf: LazyFrame) -> Result<LazyFrame, ProcessError> {
+    let schema = lf.schema()?;
+
+    if !schema.contains("full_date")
+        || !schema.contains("time")
+        || !schema.contains("activities")
+        || schema.get("full_date").unwrap() != &DataType::Utf8
+        || schema.get("time").unwrap() != &DataType::Utf8
+        || schema.get("activities").unwrap() != &DataType::Utf8
+    {
+        return Err(ProcessError::SchemaMismatch);
+    }
+
+    Ok(lf)
 }
 
 #[derive(Clone)]
 pub struct ProcessedData {
     pub dataframe: LazyFrame,
-    pub factors: HashMap<String, Vec<String>>,
-    pub activities: Vec<String>,
+    pub factors: Vec<FactorColumn>,
+    pub activities: ActivityColumn,
 }
 
-pub fn process(lf1: LazyFrame) -> Result<ProcessedData, ProcessError> {
-    let lf1 = lf1
+pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
+    let lf = check_schema(lf)?;
+
+    let lf = lf
         .with_comm_subexpr_elim(true)
         .with_columns([
             // activities
@@ -92,9 +305,9 @@ pub fn process(lf1: LazyFrame) -> Result<ProcessedData, ProcessError> {
         ])
         .cache();
 
-    let lf_for_activities = lf1.clone();
+    let lf_for_activities = lf.clone();
 
-    let lf1 = lf1
+    let lf = lf
         .with_columns(
             FACTORS
                 .into_iter()
@@ -152,9 +365,9 @@ pub fn process(lf1: LazyFrame) -> Result<ProcessedData, ProcessError> {
         )
         .cache();
 
-    let lf_for_factors = lf1.clone();
+    let lf_for_factors = lf.clone();
 
-    let lf1 = lf1
+    let lf = lf
         .with_columns([
             col("time").str().to_time(StrptimeOptions {
                 format: Some("%R".to_string()),
@@ -476,89 +689,9 @@ pub fn process(lf1: LazyFrame) -> Result<ProcessedData, ProcessError> {
         )
         .alias("logical_full_datetime")]);
 
-    let activities = lf_for_activities
-        .clone()
-        .select([col("activities")])
-        .groupby([lit("")])
-        .agg([col("activities")
-            .cast(DataType::List(Box::new(DataType::Utf8)))
-            .flatten()
-            .unique()
-            .drop_nulls()])
-        .select([col("activities").explode()])
-        .collect()?;
+    let (activities, activities_columns) = process_activities(lf_for_activities)?;
 
-    let activities2 = activities.clone();
-    let activities2 = activities2
-        .column("activities")?
-        .utf8()?
-        .par_iter_indexed()
-        .flatten()
-        .map(String::from);
-    let activities2 = activities2.collect::<Vec<_>>();
-
-    let factor_col_names = FACTORS.values().flat_map(|factor| {
-        factor.types().iter().map(move |&factor_type| {
-            (
-                factor_column_name(factor, factor_type),
-                matches!(factor, Factor::MultipleValue { .. }),
-                matches!(factor_type, FactorType::Taxonomy { .. }),
-            )
-        })
-    });
-
-    let factors = lf_for_factors
-        .clone()
-        .select(
-            factor_col_names
-                .clone()
-                .map(|(col_name, is_multi_value, is_categorical)| {
-                    if is_categorical {
-                        if is_multi_value {
-                            col(&col_name).cast(DataType::List(Box::new(DataType::Utf8)))
-                        } else {
-                            col(&col_name).cast(DataType::Utf8)
-                        }
-                    } else {
-                        col(&col_name)
-                    }
-                })
-                .collect::<Vec<_>>(),
-        )
-        .groupby([lit("").alias("group")])
-        .agg(
-            factor_col_names
-                .clone()
-                .filter_map(|(col_name, _, is_categorical)| {
-                    if is_categorical {
-                        Some(col(&col_name).flatten().unique().drop_nulls())
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>(),
-        )
-        .select([col("*").exclude(["group"])])
-        .collect()?;
-
-    let factors2 = factors
-        .iter()
-        .flat_map(|s| {
-            s.list().unwrap().into_iter().map(|x| {
-                x.map(|x| {
-                    (
-                        s.name().to_string(),
-                        x.utf8()
-                            .unwrap()
-                            .par_iter()
-                            .filter_map(|x| Some(x?.to_string()))
-                            .collect::<Vec<_>>(),
-                    )
-                })
-            })
-        })
-        .flatten()
-        .collect::<HashMap<_, _>>();
+    let (factors, factor_columns) = process_factors(lf_for_factors)?;
 
     let fixed_col_order = [
         "id",
@@ -592,39 +725,21 @@ pub fn process(lf1: LazyFrame) -> Result<ProcessedData, ProcessError> {
         "mood_level_improvement_moving_average_raw",
         "mood_level_improvement_moving_average",
     ])
-    .map(String::from)
-    .chain(FACTORS.into_iter().flat_map(|(_, factor)| {
-        factor
-            .types()
-            .iter()
-            .map(move |&factor_type| factor_column_name(factor, factor_type))
-    }))
+    .map(ColumnName::from)
     .chain(
-        factors2
+        factors
             .iter()
-            .filter(|(col_name, _)| {
-                let (_, is_multiple, _) = factor_col_names
-                    .clone()
-                    .find(|(cname, _, _)| cname == *col_name)
-                    .unwrap();
-
-                is_multiple
-            })
-            .chain(factors2.iter().filter(|(col_name, _)| {
-                let (_, is_multiple, _) = factor_col_names
-                    .clone()
-                    .find(|(cname, _, _)| cname == *col_name)
-                    .unwrap();
-
-                !is_multiple
-            }))
-            .flat_map(|(col_name, vals)| {
-                // bind as borrow so it's not moved into the closure below
-                //let factor_col_names = &factor_col_names;
-
-                vals.clone()
-                    .into_iter()
-                    .map(move |factor| format!("{col_name}: {factor}"))
+            .filter(|c| c.is_multiple())
+            .chain(factors.iter().filter(|c| !c.is_multiple()))
+            .flat_map(|c| {
+                [c.column_name.clone()].into_iter().chain(
+                    c.binary_columns
+                        .clone()
+                        .unwrap_or_default()
+                        .values()
+                        .cloned()
+                        .collect::<Vec<_>>(),
+                )
             }),
     )
     .chain(
@@ -646,61 +761,35 @@ pub fn process(lf1: LazyFrame) -> Result<ProcessedData, ProcessError> {
             "diff_activities_with_next_count",
             "diff_activities_with_next_factor",
         ]
-        .map(String::from),
+        .map(ColumnName::from),
     )
-    .chain(activities2.clone().into_iter().map(String::from));
+    .chain(activities.binary_columns.values().cloned());
 
-    let lf1 = lf1
-        .with_columns(
-            activities2
-                .iter()
-                .map(|activity| {
-                    col("activities")
-                        .list()
-                        .contains(lit(activity.clone()))
-                        .alias(activity)
-                })
-                .chain(factors2.iter().flat_map(|(col_name, vals)| {
-                    // bind as borrow so it's not moved into the closure below
-                    //let factor_col_names = &factor_col_names;
-                    let (_, is_multiple, _) = factor_col_names
-                        .clone()
-                        .find(|(cname, _, _)| cname == col_name)
-                        .unwrap();
-                    vals.iter().map(move |factor| {
-                        if is_multiple {
-                            col(col_name)
-                                .list()
-                                .contains(lit(factor.to_owned()))
-                                .alias(&format!("{col_name}: {factor}"))
-                        } else {
-                            when(col(col_name).is_null())
-                                .then(lit(false))
-                                .otherwise(col(col_name).eq(lit(factor.to_owned())))
-                                .alias(&format!("{col_name}: {factor}"))
-                        }
-                    })
-                }))
-                .collect::<Vec<_>>(),
-        )
+    let lf = lf
+        .with_columns(activities_columns.chain(factor_columns).collect::<Vec<_>>())
         .select(
             fixed_col_order
                 .clone()
                 .map(|col_name| col(&col_name))
-                .chain([col("*").exclude(fixed_col_order.chain([
-                    "matched_factors".to_string(),
-                    "logical_date_stage_1".to_string(),
-                    "logical_date_stage_2".to_string(),
-                    "weekday".to_string(),
-                    "date".to_string(),
-                    "note_title".to_string(),
-                ]))])
+                .chain([col("*").exclude(
+                    fixed_col_order.chain(
+                        [
+                            "matched_factors",
+                            "logical_date_stage_1",
+                            "logical_date_stage_2",
+                            "weekday",
+                            "date",
+                            "note_title",
+                        ]
+                        .map(ColumnName::from),
+                    ),
+                )])
                 .collect::<Vec<_>>(),
         );
 
     Ok(ProcessedData {
-        dataframe: lf1,
-        factors: factors2,
-        activities: activities2,
+        dataframe: lf,
+        factors,
+        activities,
     })
 }

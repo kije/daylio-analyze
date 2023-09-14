@@ -16,9 +16,9 @@ phf = { version = "^0.11", features = ["macros"] }
 const-gen = { version = "^1.5" }
 thiserror = "^1.0.48"
 enum-kinds = "^0.5.1"
-enum_access = { version = "^0.4.0", git = "https://github.com/kije/enum_access.git" }
+enum_access = { version = "^0.4.2", git = "https://github.com/kije/enum_access.git" }
 # impl-enum = "^0.3.0"
-
+# const_format = "^0.2.31"
 
 [dependencies.polars]
 version = "^0.32.1"

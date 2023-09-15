@@ -4,8 +4,11 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Kim D. Jeker <git@kije.ch>"]
 
+[[bin]]
+required-features = ["csv"]
+
 [features]
-default = ["debug", "csv"]
+default = []
 debug = ["fmt"]
 fmt = ["polars/fmt"]
 csv = ["polars/csv"]
@@ -65,7 +68,6 @@ codegen-units = 1
 lto = true
 opt-level = 3
 strip = true
-
 
 [profile.release.package."*"]
 opt-level = 3

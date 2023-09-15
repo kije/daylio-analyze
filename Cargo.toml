@@ -50,7 +50,9 @@ features = [
     "dtype-struct",
     "lazy_regex",
     "list_sets",
-    "streaming"
+    "streaming",
+    "polars-io",
+    "is_in"
 ]
 
 [build-dependencies]

@@ -45,7 +45,7 @@ type ColumnExprIter = Box<dyn Iterator<Item = Expr>>;
 fn process_activities(lf: LazyFrame) -> Result<(ActivityColumn, ColumnExprIter), ProcessError> {
     let activities = lf
         .select([col("activities")])
-        .groupby([lit("")])
+        .group_by([lit("")])
         .agg([col("activities")
             .cast(DataType::List(Box::new(DataType::Utf8)))
             .flatten()
@@ -140,7 +140,7 @@ fn process_factors(lf: LazyFrame) -> Result<(Vec<FactorColumn>, ColumnExprIter),
                 })
                 .collect::<Vec<_>>(),
         )
-        .groupby([lit("").alias("group")])
+        .group_by([lit("").alias("group")])
         .agg(
             factor_col_names
                 .clone()
@@ -263,9 +263,9 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
             // activities
             col("activities")
                 .str()
-                .split("|")
+                .split("|".lit())
                 .list()
-                .eval(col("").str().strip(None).filter(col("").neq(lit(""))), true)
+                .eval(col("").str().strip_chars(None).filter(col("").neq(lit(""))), true)
                 .list()
                 .unique(),
         ])
@@ -398,6 +398,7 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                         cache: false,
                         ..Default::default()
                     },
+                    lit("raise")
                 )
                 .alias("full_datetime"),
             col("full_date")
@@ -434,28 +435,28 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
             col("activities_next").cast(DataType::List(Box::new(DataType::Categorical(None)))),
             col("activities")
                 .list()
-                .intersection(col("activities_previous"))
+                .set_intersection(col("activities_previous"))
                 .list()
                 .unique()
                 .cast(DataType::List(Box::new(DataType::Categorical(None))))
                 .alias("common_activities_with_previous"),
             col("activities")
                 .list()
-                .intersection(col("activities_next"))
+                .set_intersection(col("activities_next"))
                 .list()
                 .unique()
                 .cast(DataType::List(Box::new(DataType::Categorical(None))))
                 .alias("common_activities_with_next"),
             col("activities")
                 .list()
-                .difference(col("activities_previous"))
+                .set_difference(col("activities_previous"))
                 .list()
                 .unique()
                 .cast(DataType::List(Box::new(DataType::Categorical(None))))
                 .alias("diff_activities_with_previous"),
             col("activities")
                 .list()
-                .difference(col("activities_next"))
+                .set_difference(col("activities_next"))
                 .list()
                 .unique()
                 .cast(DataType::List(Box::new(DataType::Categorical(None))))
@@ -685,6 +686,7 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                 strict: false,
                 ..Default::default()
             },
+            lit("raise")
         )
         .alias("logical_full_datetime")]);
 

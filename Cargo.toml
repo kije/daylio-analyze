@@ -1,6 +1,6 @@
 [package]
 name = "daylio-analyze"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Kim D. Jeker <git@kije.ch>"]
 
@@ -10,7 +10,6 @@ default = []
 debug = ["fmt"]
 fmt = ["polars/fmt"]
 csv = ["polars/csv"]
-avx512 = ["polars/avx512"]
 
 
 [dependencies]
@@ -23,7 +22,7 @@ enum_access = { version = "^0.4.2", git = "https://github.com/kije/enum_access.g
 # const_format = "^0.2.31"
 
 [dependencies.polars]
-version = "^0.32.1"
+version = "^0.33.0"
 default-features = false
 features = [
     "temporal",
@@ -48,6 +47,8 @@ features = [
     "dtype-i16",
     "dtype-categorical",
     "dtype-struct",
+    "string_encoding",
+    "rows",
     "lazy_regex",
     "list_sets",
     "streaming",

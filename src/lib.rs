@@ -15,6 +15,7 @@ use crate::consts::{
 };
 
 pub(crate) mod consts;
+pub mod utils;
 
 #[derive(Error, Debug)]
 pub enum ProcessError {

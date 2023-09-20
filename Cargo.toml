@@ -1,6 +1,6 @@
 [package]
 name = "daylio-analyze"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["Kim D. Jeker <git@kije.ch>"]
 
@@ -22,7 +22,7 @@ enum_access = { version = "^0.4.2", git = "https://github.com/kije/enum_access.g
 # const_format = "^0.2.31"
 
 [dependencies.polars]
-version = "^0.33.0"
+version = "^0.33.2"
 default-features = false
 features = [
     "temporal",

@@ -1,5 +1,4 @@
 use polars::prelude::*;
-use polars::prelude::{LazyCsvReader, LazyFileListReader};
 
 use daylio_analyze::{process, ProcessError};
 

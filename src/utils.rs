@@ -59,7 +59,7 @@ pub fn map_sleep_duration_value_to_value_range(sleep: f32) -> Option<ValueRange>
     }
 }
 
-pub fn get_factor_column_name(factors: Vec<FactorColumn>, factor_tag: &str, factor_type_tag: &str) -> Option<Cow<'_, str>> {
+pub fn get_factor_column_name(factors: &[FactorColumn], factor_tag: &'_ str, factor_type_tag: &'_ str) -> Option<Cow<'static, str>> {
     factors
         .iter()
         .find(|factor_column| {

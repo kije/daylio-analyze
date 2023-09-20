@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use polars::export::chrono::NaiveDateTime;
 use polars::export::num::FromPrimitive;
 use polars::prelude::*;
 use crate::{FactorColumn};
@@ -66,4 +67,21 @@ pub fn get_factor_column_name(factors: &[FactorColumn], factor_tag: &'_ str, fac
             *factor_column.factor.tag() == factor_tag && *factor_column.factor_type.tag() == factor_type_tag
         })
         .map(|factor_column| factor_column.column_name.clone())
+}
+
+pub fn anyvalue_to_datetime(datetime: AnyValue) -> Result<NaiveDateTime, &str> {
+    match datetime {
+        AnyValue::Datetime(amount, unit, ..) => {
+            let naive_date_time = NaiveDateTime::from_timestamp_millis(
+                convert_time_units(
+                    amount,
+                    unit,
+                    TimeUnit::Milliseconds,
+                )
+            ).ok_or("could not parse date")?;
+
+            Ok(naive_date_time)
+        }
+        _ => Err("full_datetime is not a datetime value"),
+    }
 }

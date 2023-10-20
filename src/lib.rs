@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+#[cfg(any(feature = "process_factors", feature = "process_activities"))]
 use std::collections::HashMap;
 use std::ops::Div;
 
@@ -10,12 +11,15 @@ use thiserror::Error;
 pub use crate::consts::{
     Factor, FactorType, Mood, MoodData, ACTIVITIES_MAP, FACTORS, FACTOR_TYPES, MOOD_2_MOOD_ENUM,
     MAX_MOOD_LEVEL,
-    MIN_MOOD_LEVEL
+    MIN_MOOD_LEVEL,
 };
 use crate::consts::{
-    TimeBlock, FACTOR_TAG_RE, LAST_MOMENT_OF_THE_DAY, SLEEP_ACTIVITY, TIME_OF_DAY_INTERVALS,
-
+    TimeBlock,
+    LAST_MOMENT_OF_THE_DAY, SLEEP_ACTIVITY, TIME_OF_DAY_INTERVALS,
 };
+
+#[cfg(feature = "process_factors")]
+use crate::consts::{FACTOR_TAG_RE};
 
 pub(crate) mod consts;
 pub mod utils;
@@ -34,8 +38,10 @@ pub enum ProcessError {
 
 type ColumnName = Cow<'static, str>;
 
+#[cfg(feature = "process_activities")]
 type ActivityValue = Cow<'static, str>;
 
+#[cfg(feature = "process_activities")]
 #[derive(Clone, Debug)]
 pub struct ActivityColumn {
     pub column_name: ColumnName,
@@ -43,9 +49,9 @@ pub struct ActivityColumn {
     pub binary_columns: HashMap<ActivityValue, ColumnName>,
 }
 
-type ColumnExprIter = Box<dyn Iterator<Item = Expr>>;
+type ColumnExprIter = Box<dyn Iterator<Item=Expr>>;
 
-#[cfg(not(feature = "no_proccess"))]
+#[cfg(all(not(feature = "no_proccess"), feature = "process_activities"))]
 #[inline(always)]
 fn process_activities(lf: LazyFrame) -> Result<(ActivityColumn, ColumnExprIter), ProcessError> {
     let activities = lf
@@ -85,8 +91,10 @@ fn process_activities(lf: LazyFrame) -> Result<(ActivityColumn, ColumnExprIter),
     ))
 }
 
+#[cfg(feature = "process_factors")]
 type FactorValue = Cow<'static, str>;
 
+#[cfg(feature = "process_factors")]
 #[derive(Clone, Debug)]
 pub struct FactorColumn {
     pub factor: &'static Factor,
@@ -96,6 +104,7 @@ pub struct FactorColumn {
     pub binary_columns: Option<HashMap<FactorValue, ColumnName>>,
 }
 
+#[cfg(feature = "process_factors")]
 impl FactorColumn {
     pub const fn is_multiple(&self) -> bool {
         matches!(self.factor, Factor::MultipleValue { .. })
@@ -106,7 +115,7 @@ impl FactorColumn {
     }
 }
 
-#[cfg(not(feature = "no_proccess"))]
+#[cfg(all(not(feature = "no_proccess"), feature = "process_factors"))]
 #[inline(always)]
 fn factor_column_name(factor: &Factor, factor_type: &FactorType) -> ColumnName {
     let tag = factor.tag();
@@ -117,7 +126,7 @@ fn factor_column_name(factor: &Factor, factor_type: &FactorType) -> ColumnName {
     ColumnName::from(s)
 }
 
-#[cfg(not(feature = "no_proccess"))]
+#[cfg(all(not(feature = "no_proccess"), feature = "process_factors"))]
 #[inline(always)]
 fn process_factors(lf: LazyFrame) -> Result<(Vec<FactorColumn>, ColumnExprIter), ProcessError> {
     let factor_col_names = FACTORS.values().flat_map(|factor| {
@@ -227,7 +236,7 @@ fn process_factors(lf: LazyFrame) -> Result<(Vec<FactorColumn>, ColumnExprIter),
                     } else {
                         col(&column_name)
                     }
-                    .alias(&c)
+                        .alias(&c)
                 })
             })
         })
@@ -254,10 +263,13 @@ pub fn check_schema(lf: LazyFrame) -> Result<LazyFrame, ProcessError> {
     Ok(lf)
 }
 
+#[cfg(not(feature = "no_proccess"))]
 #[derive(Clone)]
 pub struct ProcessedData {
     pub dataframe: LazyFrame,
+    #[cfg(feature = "process_factors")]
     pub factors: Vec<FactorColumn>,
+    #[cfg(feature = "process_activities")]
     pub activities: ActivityColumn,
 }
 
@@ -265,8 +277,10 @@ pub struct ProcessedData {
 pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
     let lf = check_schema(lf)?;
 
+    #[cfg(feature = "cse")]
+        let lf = lf.with_comm_subexpr_elim(true);
+
     let lf = lf
-        .with_comm_subexpr_elim(true)
         .with_columns([
             // activities
             col("activities")
@@ -276,7 +290,10 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                 .eval(col("").str().strip_chars(None).filter(col("").neq(lit(""))), true)
                 .list()
                 .unique(),
-        ])
+        ]);
+
+    #[cfg(feature = "process_factors")]
+        let lf = lf
         .with_columns([
             // activities/factors
             col("activities")
@@ -309,12 +326,15 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                 ),
                 true,
             ),
-        ])
-        .cache();
+        ]);
 
-    let lf_for_activities = lf.clone();
+    let lf = lf.cache();
 
-    let lf = lf
+    #[cfg(feature = "process_activities")]
+        let lf_for_activities = lf.clone();
+
+    #[cfg(feature = "process_factors")]
+        let lf = lf
         .with_columns(
             FACTORS
                 .into_iter()
@@ -338,12 +358,12 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                                     .struct_()
                                     .field_by_name("factor_type")
                                     .eq(lit(factor_type_tag)))
-                                .and(
-                                    col("")
-                                        .struct_()
-                                        .field_by_name("factor_name")
-                                        .eq(lit(factor_tag)),
-                                ),
+                                    .and(
+                                        col("")
+                                            .struct_()
+                                            .field_by_name("factor_name")
+                                            .eq(lit(factor_tag)),
+                                    ),
                             ),
                             true,
                         );
@@ -372,7 +392,8 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
         )
         .cache();
 
-    let lf_for_factors = lf.clone();
+    #[cfg(feature = "process_factors")]
+        let lf_for_factors = lf.clone();
 
     let lf = lf
         .with_columns([
@@ -390,9 +411,12 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                 .then(lit(true))
                 .otherwise(lit(false))
                 .alias("is_sleep_entry"),
-            col("activities").list().lengths().alias("activities_count"),
-            col("activities").shift(-1).alias("activities_previous"),
-            col("activities").shift(1).alias("activities_next"),
+            #[cfg(feature = "process_activities")]
+                { col("activities").list().lengths().alias("activities_count") },
+            #[cfg(feature = "process_activities")]
+                { col("activities").shift(-1).alias("activities_previous") },
+            #[cfg(feature = "process_activities")]
+                { col("activities").shift(1).alias("activities_next") },
         ])
         .with_columns([
             // date stuff
@@ -406,14 +430,15 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                         cache: false,
                         ..Default::default()
                     },
-                    lit("raise")
+                    lit("raise"),
                 )
                 .alias("full_datetime"),
-            col("full_date")
-                .dt()
-                .strftime("%j")
-                .cast(DataType::UInt16)
-                .alias("day_of_year"),
+            // FIXME
+            // col("full_date")
+            //     .dt()
+            //     .strftime("%j")
+            //     .cast(DataType::UInt16)
+            //     .alias("day_of_year"),
             col("time")
                 .dt()
                 .strftime("%H.%M")
@@ -439,36 +464,50 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                 )
                 .alias("mood_level"),
             col("activities").cast(DataType::List(Box::new(DataType::Categorical(None)))),
-            col("activities_previous").cast(DataType::List(Box::new(DataType::Categorical(None)))),
-            col("activities_next").cast(DataType::List(Box::new(DataType::Categorical(None)))),
-            col("activities")
-                .list()
-                .set_intersection(col("activities_previous"))
-                .list()
-                .unique()
-                .cast(DataType::List(Box::new(DataType::Categorical(None))))
-                .alias("common_activities_with_previous"),
-            col("activities")
-                .list()
-                .set_intersection(col("activities_next"))
-                .list()
-                .unique()
-                .cast(DataType::List(Box::new(DataType::Categorical(None))))
-                .alias("common_activities_with_next"),
-            col("activities")
-                .list()
-                .set_difference(col("activities_previous"))
-                .list()
-                .unique()
-                .cast(DataType::List(Box::new(DataType::Categorical(None))))
-                .alias("diff_activities_with_previous"),
-            col("activities")
-                .list()
-                .set_difference(col("activities_next"))
-                .list()
-                .unique()
-                .cast(DataType::List(Box::new(DataType::Categorical(None))))
-                .alias("diff_activities_with_next"),
+            #[cfg(feature = "process_activities")]
+                { col("activities_previous").cast(DataType::List(Box::new(DataType::Categorical(None)))) },
+            #[cfg(feature = "process_activities")]
+                { col("activities_next").cast(DataType::List(Box::new(DataType::Categorical(None)))) },
+            #[cfg(feature = "process_activities")]
+                {
+                    col("activities")
+                        .list()
+                        .set_intersection(col("activities_previous"))
+                        .list()
+                        .unique()
+                        .cast(DataType::List(Box::new(DataType::Categorical(None))))
+                        .alias("common_activities_with_previous")
+                },
+            #[cfg(feature = "process_activities")]
+                {
+                    col("activities")
+                        .list()
+                        .set_intersection(col("activities_next"))
+                        .list()
+                        .unique()
+                        .cast(DataType::List(Box::new(DataType::Categorical(None))))
+                        .alias("common_activities_with_next")
+                },
+            #[cfg(feature = "process_activities")]
+                {
+                    col("activities")
+                        .list()
+                        .set_difference(col("activities_previous"))
+                        .list()
+                        .unique()
+                        .cast(DataType::List(Box::new(DataType::Categorical(None))))
+                        .alias("diff_activities_with_previous")
+                },
+            #[cfg(feature = "process_activities")]
+                {
+                    col("activities")
+                        .list()
+                        .set_difference(col("activities_next"))
+                        .list()
+                        .unique()
+                        .cast(DataType::List(Box::new(DataType::Categorical(None))))
+                        .alias("diff_activities_with_next")
+                },
         ])
         .with_columns({
             let mood_improvement_col = when(col("is_sleep_entry"))
@@ -482,12 +521,12 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                     match block {
                         TimeBlock::SameDay { from, to, .. } => (col("time_numeric")
                             .gt_eq(lit(from)))
-                        .and(col("time_numeric").lt(lit(to))),
+                            .and(col("time_numeric").lt(lit(to))),
                         TimeBlock::AcrossDays { before, after, .. } => (col("time_numeric")
                             .gt_eq(lit(after)))
-                        .or(col("time_numeric").lt(lit(before))),
+                            .or(col("time_numeric").lt(lit(before))),
                     }
-                    .alias(name)
+                        .alias(name)
                 })
                 .chain([
                     TIME_OF_DAY_INTERVALS
@@ -496,14 +535,14 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                             when(match block {
                                 TimeBlock::SameDay { from, to, .. } => (col("time_numeric")
                                     .gt_eq(lit(from)))
-                                .and(col("time_numeric").lt(lit(to))),
+                                    .and(col("time_numeric").lt(lit(to))),
                                 TimeBlock::AcrossDays { before, after, .. } => {
                                     (col("time_numeric").gt_eq(lit(after)))
                                         .or(col("time_numeric").lt(lit(before)))
                                 }
                             })
-                            .then(lit(name.replace("Is", "")))
-                            .otherwise(a)
+                                .then(lit(name.replace("Is", "")))
+                                .otherwise(a)
                         })
                         .alias("time_of_day"),
                     // logical date
@@ -524,67 +563,90 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                         .shift(1)
                         .alias("mood_level_improvement_next_raw"),
                     col("mood_level").shift(-1).alias("mood_level_previous"),
-                    //
-                    col("common_activities_with_previous")
-                        .list()
-                        .lengths()
-                        .alias("common_activities_with_previous_count"),
-                    col("common_activities_with_next")
-                        .list()
-                        .lengths()
-                        .alias("common_activities_with_next_count"),
-                    col("diff_activities_with_previous")
-                        .list()
-                        .lengths()
-                        .alias("diff_activities_with_previous_count"),
-                    col("diff_activities_with_next")
-                        .list()
-                        .lengths()
-                        .alias("diff_activities_with_next_count"),
-                    when(
-                        col("activities_count")
-                            .eq(lit(0))
-                            .or(col("activities_count").is_null()),
-                    )
-                    .then(lit(0.0))
-                    .otherwise(
-                        col("common_activities_with_previous").list().lengths()
-                            * (lit(1.0).div(col("activities_count"))),
-                    )
-                    .alias("common_activities_with_previous_factor"),
-                    when(
-                        col("activities_count")
-                            .eq(lit(0))
-                            .or(col("activities_count").is_null()),
-                    )
-                    .then(lit(0.0))
-                    .otherwise(
-                        col("common_activities_with_next").list().lengths()
-                            * (lit(1.0).div(col("activities_count"))),
-                    )
-                    .alias("common_activities_with_next_factor"),
-                    when(
-                        col("activities_count")
-                            .eq(lit(0))
-                            .or(col("activities_count").is_null()),
-                    )
-                    .then(lit(0.0))
-                    .otherwise(
-                        col("diff_activities_with_previous").list().lengths()
-                            * (lit(1.0).div(col("activities_count"))),
-                    )
-                    .alias("diff_activities_with_previous_factor"),
-                    when(
-                        col("activities_count")
-                            .eq(lit(0))
-                            .or(col("activities_count").is_null()),
-                    )
-                    .then(lit(0.0))
-                    .otherwise(
-                        col("diff_activities_with_next").list().lengths()
-                            * (lit(1.0).div(col("activities_count"))),
-                    )
-                    .alias("diff_activities_with_next_factor"),
+                    #[cfg(feature = "process_activities")]
+                        {
+                            col("common_activities_with_previous")
+                                .list()
+                                .lengths()
+                                .alias("common_activities_with_previous_count")
+                        },
+                    #[cfg(feature = "process_activities")]
+                        {
+                            col("common_activities_with_next")
+                                .list()
+                                .lengths()
+                                .alias("common_activities_with_next_count")
+                        },
+                    #[cfg(feature = "process_activities")]
+                        {
+                            col("diff_activities_with_previous")
+                                .list()
+                                .lengths()
+                                .alias("diff_activities_with_previous_count")
+                        },
+                    #[cfg(feature = "process_activities")]
+                        {
+                            col("diff_activities_with_next")
+                                .list()
+                                .lengths()
+                                .alias("diff_activities_with_next_count")
+                        },
+                    #[cfg(feature = "process_activities")]
+                        {
+                            when(
+                                col("activities_count")
+                                    .eq(lit(0))
+                                    .or(col("activities_count").is_null()),
+                            )
+                                .then(lit(0.0))
+                                .otherwise(
+                                    col("common_activities_with_previous").list().lengths()
+                                        * (lit(1.0).div(col("activities_count"))),
+                                )
+                                .alias("common_activities_with_previous_factor")
+                        },
+                    #[cfg(feature = "process_activities")]
+                        {
+                            when(
+                                col("activities_count")
+                                    .eq(lit(0))
+                                    .or(col("activities_count").is_null()),
+                            )
+                                .then(lit(0.0))
+                                .otherwise(
+                                    col("common_activities_with_next").list().lengths()
+                                        * (lit(1.0).div(col("activities_count"))),
+                                )
+                                .alias("common_activities_with_next_factor")
+                        },
+                    #[cfg(feature = "process_activities")]
+                        {
+                            when(
+                                col("activities_count")
+                                    .eq(lit(0))
+                                    .or(col("activities_count").is_null()),
+                            )
+                                .then(lit(0.0))
+                                .otherwise(
+                                    col("diff_activities_with_previous").list().lengths()
+                                        * (lit(1.0).div(col("activities_count"))),
+                                )
+                                .alias("diff_activities_with_previous_factor")
+                        },
+                    #[cfg(feature = "process_activities")]
+                        {
+                            when(
+                                col("activities_count")
+                                    .eq(lit(0))
+                                    .or(col("activities_count").is_null()),
+                            )
+                                .then(lit(0.0))
+                                .otherwise(
+                                    col("diff_activities_with_next").list().lengths()
+                                        * (lit(1.0).div(col("activities_count"))),
+                                )
+                                .alias("diff_activities_with_next_factor")
+                        },
                 ])
                 .collect::<Vec<_>>()
         })
@@ -597,8 +659,8 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                             .lt_eq(15)
                             .and(col("mood_level_previous").lt(col("mood_level"))),
                     )
-                    .then(col("mood_level_previous").div(lit(2)))
-                    .otherwise(lit(0)),
+                        .then(col("mood_level_previous").div(lit(2)))
+                        .otherwise(lit(0)),
                 )
                 .alias("mood_level_improvement_boost"),
             // moodlevel improbvement
@@ -624,33 +686,43 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                 .sign()
                 .cast(DataType::Int8)
                 .alias("mood_level_improvement_with_boost"),
+            #[cfg(feature = "process_activities")]
+                {
+                    when(col("is_sleep_entry"))
+                        .then(lit(0))
+                        .otherwise(
+                            ((lit(-1)
+                                * col("mood_level_improvement_previous_raw")
+                                * col("common_activities_with_previous_factor"))
+                                + (col("mood_level_improvement_raw_with_boost") * lit(5))
+                                + (col("mood_level_improvement_next_raw")
+                                * col("common_activities_with_next_factor")
+                                * lit(2)))
+                                .div(lit(8)),
+                        )
+                        .alias("mood_level_improvement_moving_average_raw")
+                },
+        ]);
+
+    #[cfg(feature = "process_activities")]
+        let lf = lf
+        .with_columns([
             when(col("is_sleep_entry"))
                 .then(lit(0))
                 .otherwise(
                     ((lit(-1)
-                        * col("mood_level_improvement_previous_raw")
+                        * col("mood_level_improvement_previous")
                         * col("common_activities_with_previous_factor"))
-                        + (col("mood_level_improvement_raw_with_boost") * lit(5))
-                        + (col("mood_level_improvement_next_raw")
-                            * col("common_activities_with_next_factor")
-                            * lit(2)))
-                    .div(lit(8)),
-                )
-                .alias("mood_level_improvement_moving_average_raw"),
-        ])
-        .with_columns([when(col("is_sleep_entry"))
-            .then(lit(0))
-            .otherwise(
-                ((lit(-1)
-                    * col("mood_level_improvement_previous")
-                    * col("common_activities_with_previous_factor"))
-                    + (col("mood_level_improvement_with_boost") * lit(5))
-                    + (col("mood_level_improvement_next")
+                        + (col("mood_level_improvement_with_boost") * lit(5))
+                        + (col("mood_level_improvement_next")
                         * col("common_activities_with_next_factor")
                         * lit(2)))
-                .div(lit(8)),
-            )
-            .alias("mood_level_improvement_moving_average")])
+                        .div(lit(8)),
+                )
+                .alias("mood_level_improvement_moving_average")
+        ]);
+
+    let lf = lf
         .sort(
             "full_datetime",
             SortOptions {
@@ -664,9 +736,9 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                 .neq_missing(col("full_date"))
                 .and(col("time_numeric").gt_eq(lit(5.0))),
         )
-        .then(col("full_date"))
-        .otherwise(NULL.lit())
-        .alias("logical_date_stage_2")])
+            .then(col("full_date"))
+            .otherwise(NULL.lit())
+            .alias("logical_date_stage_2")])
         .with_columns([
             // logical date
             col("logical_date_stage_1")
@@ -683,24 +755,27 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
         .with_columns([(col("logical_date").cast(DataType::Utf8)
             + lit(" ")
             + col("logical_time").cast(DataType::Utf8))
-        .str()
-        .to_datetime(
-            Some(TimeUnit::Milliseconds),
-            None,
-            StrptimeOptions {
-                format: Some("%F %T%.f".to_string()),
-                cache: false,
-                exact: false,
-                strict: false,
-                ..Default::default()
-            },
-            lit("raise")
-        )
-        .alias("logical_full_datetime")]);
+            .str()
+            .to_datetime(
+                Some(TimeUnit::Milliseconds),
+                None,
+                StrptimeOptions {
+                    format: Some("%F %T%.f".to_string()),
+                    cache: false,
+                    exact: false,
+                    strict: false,
+                    ..Default::default()
+                },
+                lit("raise"),
+            )
+            .alias("logical_full_datetime")])
+        ;
 
-    let (activities, activities_columns) = process_activities(lf_for_activities)?;
+    #[cfg(feature = "process_activities")]
+        let (activities, activities_columns) = process_activities(lf_for_activities)?;
 
-    let (factors, factor_columns) = process_factors(lf_for_factors)?;
+    #[cfg(feature = "process_factors")]
+        let (factors, factor_columns) = process_factors(lf_for_factors)?;
 
     let fixed_col_order = [
         "id",
@@ -710,95 +785,136 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
         "logical_date",
         "logical_time",
         "logical_full_datetime",
-        "day_of_year",
+        //"day_of_year", // FIXME
         "time_numeric",
     ]
-    .into_iter()
-    .chain(TIME_OF_DAY_INTERVALS.into_iter().map(|(&name, _)| name))
-    .chain([
-        "time_of_day",
-        "is_sleep_entry",
-        "note",
-        "mood",
-        "mood_level",
-        "mood_level_previous",
-        "mood_level_improvement_boost",
-        "mood_level_improvement_previous_raw",
-        "mood_level_improvement_raw",
-        "mood_level_improvement_raw_with_boost",
-        "mood_level_improvement_next_raw",
-        "mood_level_improvement_previous",
-        "mood_level_improvement",
-        "mood_level_improvement_with_boost",
-        "mood_level_improvement_next",
-        "mood_level_improvement_moving_average_raw",
-        "mood_level_improvement_moving_average",
-    ])
-    .map(ColumnName::from)
-    .chain(
-        factors
-            .iter()
-            .filter(|c| c.is_multiple())
-            .chain(factors.iter().filter(|c| !c.is_multiple()))
-            .flat_map(|c| {
-                [c.column_name.clone()].into_iter().chain(
-                    c.binary_columns
-                        .clone()
-                        .unwrap_or_default()
-                        .values()
-                        .cloned()
-                        .collect::<Vec<_>>(),
-                )
-            }),
-    )
-    .chain(
-        [
-            "activities",
-            "activities_previous",
-            "activities_count",
-            "activities_next",
-            "common_activities_with_previous",
-            "common_activities_with_previous_count",
-            "common_activities_with_previous_factor",
-            "common_activities_with_next",
-            "common_activities_with_next_count",
-            "common_activities_with_next_factor",
-            "diff_activities_with_previous",
-            "diff_activities_with_previous_count",
-            "diff_activities_with_previous_factor",
-            "diff_activities_with_next",
-            "diff_activities_with_next_count",
-            "diff_activities_with_next_factor",
-        ]
-        .map(ColumnName::from),
-    )
-    .chain(activities.binary_columns.values().cloned());
+        .into_iter()
+        .chain(TIME_OF_DAY_INTERVALS.into_iter().map(|(&name, _)| name))
+        .chain([
+            "time_of_day",
+            "is_sleep_entry",
+            "note",
+            "mood",
+            "mood_level",
+            "mood_level_previous",
+            "mood_level_improvement_boost",
+            "mood_level_improvement_previous_raw",
+            "mood_level_improvement_raw",
+            "mood_level_improvement_raw_with_boost",
+            "mood_level_improvement_next_raw",
+            "mood_level_improvement_previous",
+            "mood_level_improvement",
+            "mood_level_improvement_with_boost",
+            "mood_level_improvement_next",
+            #[cfg(feature = "process_activities")]
+                "mood_level_improvement_moving_average_raw",
+            #[cfg(feature = "process_activities")]
+                "mood_level_improvement_moving_average",
+        ])
+        .map(ColumnName::from);
+
+    #[cfg(feature = "process_factors")]
+        let fixed_col_order = fixed_col_order
+        .chain(
+            factors
+                .iter()
+                .filter(|c| c.is_multiple())
+                .chain(factors.iter().filter(|c| !c.is_multiple()))
+                .flat_map(|c| {
+                    [c.column_name.clone()].into_iter().chain(
+                        c.binary_columns
+                            .clone()
+                            .unwrap_or_default()
+                            .values()
+                            .cloned()
+                            .collect::<Vec<_>>(),
+                    )
+                }),
+        );
+
+    let fixed_col_order = fixed_col_order
+        .chain(
+            [
+                "activities",
+                #[cfg(feature = "process_activities")]
+                    "activities_previous",
+                #[cfg(feature = "process_activities")]
+                    "activities_count",
+                #[cfg(feature = "process_activities")]
+                    "activities_next",
+                #[cfg(feature = "process_activities")]
+                    "common_activities_with_previous",
+                #[cfg(feature = "process_activities")]
+                    "common_activities_with_previous_count",
+                #[cfg(feature = "process_activities")]
+                    "common_activities_with_previous_factor",
+                #[cfg(feature = "process_activities")]
+                    "common_activities_with_next",
+                #[cfg(feature = "process_activities")]
+                    "common_activities_with_next_count",
+                #[cfg(feature = "process_activities")]
+                    "common_activities_with_next_factor",
+                #[cfg(feature = "process_activities")]
+                    "diff_activities_with_previous",
+                #[cfg(feature = "process_activities")]
+                    "diff_activities_with_previous_count",
+                #[cfg(feature = "process_activities")]
+                    "diff_activities_with_previous_factor",
+                #[cfg(feature = "process_activities")]
+                    "diff_activities_with_next",
+                #[cfg(feature = "process_activities")]
+                    "diff_activities_with_next_count",
+                #[cfg(feature = "process_activities")]
+                    "diff_activities_with_next_factor",
+            ]
+                .map(ColumnName::from),
+        );
+
+    #[cfg(feature = "process_activities")]
+        let fixed_col_order = fixed_col_order
+        .chain(activities.binary_columns.values().cloned());
+
+    #[cfg(all(feature = "process_activities", feature = "process_factors"))]
+        let lf = lf
+        .with_columns(activities_columns.chain(factor_columns).collect::<Vec<_>>());
+
+    #[cfg(all(feature = "process_activities", not(feature = "process_factors")))]
+        let lf = lf
+        .with_columns(activities_columns.collect::<Vec<_>>());
+
+    #[cfg(all(not(feature = "process_activities"), feature = "process_factors"))]
+        let lf = lf
+        .with_columns(factor_columns.collect::<Vec<_>>());
 
     let lf = lf
-        .with_columns(activities_columns.chain(factor_columns).collect::<Vec<_>>())
         .select(
             fixed_col_order
                 .clone()
                 .map(|col_name| col(&col_name))
-                .chain([col("*").exclude(
-                    fixed_col_order.chain(
-                        [
-                            "matched_factors",
-                            "logical_date_stage_1",
-                            "logical_date_stage_2",
-                            "weekday",
-                            "date",
-                            "note_title",
-                        ]
-                        .map(ColumnName::from),
-                    ),
-                )])
+                .chain([
+                    col("*").exclude(
+                        fixed_col_order.chain(
+                            [
+                                #[cfg(feature = "process_factors")]
+                                    "matched_factors",
+                                "logical_date_stage_1",
+                                "logical_date_stage_2",
+                                "weekday",
+                                "date",
+                                "note_title",
+                            ]
+                                .map(ColumnName::from),
+                        ),
+                    )])
                 .collect::<Vec<_>>(),
-        );
+        )
+        ;
 
     Ok(ProcessedData {
         dataframe: lf,
+        #[cfg(feature = "process_factors")]
         factors,
+        #[cfg(feature = "process_activities")]
         activities,
     })
 }
@@ -843,7 +959,7 @@ mod test {
             Series::new("mood", &["1", "1", "2", "3", "2", "6", "5"]),
             Series::new("note", &["", "", "", "", "", "", ""]),
         ])
-        .unwrap();
+            .unwrap();
 
         let result = process(df.lazy()).unwrap();
 

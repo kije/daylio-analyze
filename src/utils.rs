@@ -1,7 +1,11 @@
-use std::borrow::Cow;
 use polars::export::chrono::NaiveDateTime;
 use polars::export::num::FromPrimitive;
 use polars::prelude::*;
+
+#[cfg(feature = "process_factors")]
+use std::borrow::Cow;
+
+#[cfg(feature = "process_factors")]
 use crate::{FactorColumn};
 
 pub fn convert_time_units(v: i64, tu_l: TimeUnit, tu_r: TimeUnit) -> i64 {
@@ -60,6 +64,7 @@ pub fn map_sleep_duration_value_to_value_range(sleep: f32) -> Option<ValueRange>
     }
 }
 
+#[cfg(feature = "process_factors")]
 pub fn get_factor_column_name(factors: &[FactorColumn], factor_tag: &'_ str, factor_type_tag: &'_ str) -> Option<Cow<'static, str>> {
     factors
         .iter()

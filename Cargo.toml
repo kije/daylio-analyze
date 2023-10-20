@@ -1,45 +1,48 @@
 [package]
 name = "daylio-analyze"
-version = "0.1.8"
+version = "0.1.9"
 edition = "2021"
 authors = ["Kim D. Jeker <git@kije.ch>"]
 
 
 [features]
-default = ["polars_features_full"]
+default = ["polars_features_minimal"]
 debug = ["fmt"]
 fmt = ["polars/fmt"]
 csv = ["polars/csv"]
-polars_features_full = [
+cse = ["polars/cse"]
+nightly = ["polars/nightly"]
+timezones = ["polars/timezones"]
+process_activities = ["polars/list_sets",]
+process_factors = ["polars/extract_groups","polars/lazy_regex","polars/dtype-struct",]
+polars_features_base = [
     "polars/temporal",
-    "polars/async",
-    "polars/simd",
-    "polars/performant",
-    "polars/lazy",
     "polars/strings",
-    "polars/cse",
-    "polars/concat_str",
-    "polars/checked_arithmetic",
-    "polars/diff",
-    "polars/ndarray",
-    "polars/list_eval",
-    "polars/sign",
-    "polars/extract_groups",
     "polars/dtype-date",
     "polars/dtype-datetime",
     "polars/dtype-time",
     "polars/dtype-i8",
     "polars/dtype-u8",
     "polars/dtype-i16",
+    "polars/lazy",
     "polars/dtype-categorical",
-    "polars/dtype-struct",
-    "polars/string_encoding",
-    "polars/rows",
+    "polars/checked_arithmetic",
+]
+polars_features_minimal = [
+    "polars_features_base",
+    "polars/sign",
+    "polars/is_in",
+    "polars/diff",
+    "polars/list_eval",
     "polars/lazy_regex",
-    "polars/list_sets",
-    "polars/streaming",
-    "polars/polars-io",
-    "polars/is_in"
+]
+polars_features_full = [
+    "polars_features_minimal",
+    "cse",
+    "polars/concat_str",
+    "polars/async",
+    "polars/simd",
+    "polars/performant"
 ]
 no_proccess = []
 

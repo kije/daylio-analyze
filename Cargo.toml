@@ -4,7 +4,6 @@ version = "0.1.11"
 edition = "2021"
 authors = ["Kim D. Jeker <git@kije.ch>"]
 
-
 [features]
 default = ["polars_features_minimal"]
 debug = ["fmt"]

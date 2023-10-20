@@ -1,58 +1,58 @@
 [package]
 name = "daylio-analyze"
-version = "0.1.5"
+version = "0.1.8"
 edition = "2021"
 authors = ["Kim D. Jeker <git@kije.ch>"]
 
+
 [features]
-default = []
+default = ["polars_features_full"]
 debug = ["fmt"]
 fmt = ["polars/fmt"]
 csv = ["polars/csv"]
+polars_features_full = [
+    "polars/temporal",
+    "polars/async",
+    "polars/simd",
+    "polars/performant",
+    "polars/lazy",
+    "polars/strings",
+    "polars/cse",
+    "polars/concat_str",
+    "polars/checked_arithmetic",
+    "polars/diff",
+    "polars/ndarray",
+    "polars/list_eval",
+    "polars/sign",
+    "polars/extract_groups",
+    "polars/dtype-date",
+    "polars/dtype-datetime",
+    "polars/dtype-time",
+    "polars/dtype-i8",
+    "polars/dtype-u8",
+    "polars/dtype-i16",
+    "polars/dtype-categorical",
+    "polars/dtype-struct",
+    "polars/string_encoding",
+    "polars/rows",
+    "polars/lazy_regex",
+    "polars/list_sets",
+    "polars/streaming",
+    "polars/polars-io",
+    "polars/is_in"
+]
+no_proccess = []
 
 [dependencies]
 phf = { version = "^0.11", features = ["macros"] }
-const-gen = { version = "^1.5" }
-thiserror = "^1.0.48"
-enum-kinds = "^0.5.1"
-enum_access = { version = "^0.4.2", git = "https://github.com/kije/enum_access.git" }
-# impl-enum = "^0.3.0"
-# const_format = "^0.2.31"
+const-gen = { version = "^1.6" }
+thiserror = "^1.0"
+enum-kinds = "^0.5"
+enum_access = { version = "^0.4", git = "https://github.com/kije/enum_access.git" }
 
 [dependencies.polars]
-version = "^0.33.2"
+version = "^0.33"
 default-features = false
-features = [
-    "temporal",
-    "async",
-    "simd",
-    "performant",
-    "lazy",
-    "strings",
-    "cse",
-    "concat_str",
-    "checked_arithmetic",
-    "diff",
-    "ndarray",
-    "list_eval",
-    "sign",
-    "extract_groups",
-    "dtype-date",
-    "dtype-datetime",
-    "dtype-time",
-    "dtype-i8",
-    "dtype-u8",
-    "dtype-i16",
-    "dtype-categorical",
-    "dtype-struct",
-    "string_encoding",
-    "rows",
-    "lazy_regex",
-    "list_sets",
-    "streaming",
-    "polars-io",
-    "is_in"
-]
 
 [build-dependencies]
 phf = { version = "^0.11", default-features = false }

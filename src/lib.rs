@@ -9,9 +9,12 @@ use thiserror::Error;
 
 pub use crate::consts::{
     Factor, FactorType, Mood, MoodData, ACTIVITIES_MAP, FACTORS, FACTOR_TYPES, MOOD_2_MOOD_ENUM,
+    MAX_MOOD_LEVEL,
+    MIN_MOOD_LEVEL
 };
 use crate::consts::{
     TimeBlock, FACTOR_TAG_RE, LAST_MOMENT_OF_THE_DAY, SLEEP_ACTIVITY, TIME_OF_DAY_INTERVALS,
+
 };
 
 pub(crate) mod consts;
@@ -42,7 +45,8 @@ pub struct ActivityColumn {
 
 type ColumnExprIter = Box<dyn Iterator<Item = Expr>>;
 
-#[inline]
+#[cfg(not(feature = "no_proccess"))]
+#[inline(always)]
 fn process_activities(lf: LazyFrame) -> Result<(ActivityColumn, ColumnExprIter), ProcessError> {
     let activities = lf
         .select([col("activities")])
@@ -102,7 +106,8 @@ impl FactorColumn {
     }
 }
 
-#[inline]
+#[cfg(not(feature = "no_proccess"))]
+#[inline(always)]
 fn factor_column_name(factor: &Factor, factor_type: &FactorType) -> ColumnName {
     let tag = factor.tag();
     let factor_type_tag = factor_type.tag();
@@ -112,7 +117,8 @@ fn factor_column_name(factor: &Factor, factor_type: &FactorType) -> ColumnName {
     ColumnName::from(s)
 }
 
-#[inline]
+#[cfg(not(feature = "no_proccess"))]
+#[inline(always)]
 fn process_factors(lf: LazyFrame) -> Result<(Vec<FactorColumn>, ColumnExprIter), ProcessError> {
     let factor_col_names = FACTORS.values().flat_map(|factor| {
         factor.types().iter().map(move |&factor_type| FactorColumn {
@@ -230,8 +236,8 @@ fn process_factors(lf: LazyFrame) -> Result<(Vec<FactorColumn>, ColumnExprIter),
     Ok((factors_columns, Box::new(factors_columns_iterator)))
 }
 
-#[inline]
-fn check_schema(lf: LazyFrame) -> Result<LazyFrame, ProcessError> {
+#[inline(always)]
+pub fn check_schema(lf: LazyFrame) -> Result<LazyFrame, ProcessError> {
     let schema = lf.schema()?;
 
     if !schema.contains("full_date")
@@ -255,6 +261,7 @@ pub struct ProcessedData {
     pub activities: ActivityColumn,
 }
 
+#[cfg(not(feature = "no_proccess"))]
 pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
     let lf = check_schema(lf)?;
 

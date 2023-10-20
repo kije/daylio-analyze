@@ -255,6 +255,12 @@ fn main() {
 
     let activities_map = ACTIVITIES_MAP.into_iter().collect::<HashMap<&str, &str>>();
 
+    let max_mood_level = BASE_MOODS
+        .iter()
+        .map(|MoodDataRaw(_,  numeric_mood, ..)| *numeric_mood)
+        .max()
+        .unwrap();
+
     for m @ MoodDataRaw(mood, numeric_mood, enum_variant, mood_label, mood_label_short) in
         &BASE_MOODS
     {
@@ -481,6 +487,14 @@ fn main() {
         base_mood_2_enum.build()
     )
     .unwrap();
+
+    writeln!(
+        &mut file,
+        "{}\n{}",
+        const_declaration!(pub MAX_MOOD_LEVEL = max_mood_level),
+        const_declaration!(pub MIN_MOOD_LEVEL = 0u8),
+    )
+        .unwrap();
 
     writeln!(
         &mut file,

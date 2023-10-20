@@ -1,4 +1,3 @@
-use polars::export::chrono::NaiveDateTime;
 use polars::export::num::FromPrimitive;
 use polars::prelude::*;
 
@@ -7,6 +6,9 @@ use std::borrow::Cow;
 
 #[cfg(feature = "process_factors")]
 use crate::{FactorColumn};
+
+#[cfg(feature = "no_proccess")]
+use polars::export::chrono::NaiveDateTime;
 
 pub fn convert_time_units(v: i64, tu_l: TimeUnit, tu_r: TimeUnit) -> i64 {
     match (tu_l, tu_r) {
@@ -74,6 +76,7 @@ pub fn get_factor_column_name(factors: &[FactorColumn], factor_tag: &'_ str, fac
         .map(|factor_column| factor_column.column_name.clone())
 }
 
+#[cfg(feature = "no_proccess")]
 pub fn anyvalue_to_datetime(datetime: AnyValue) -> Result<NaiveDateTime, &str> {
     match datetime {
         AnyValue::Datetime(amount, unit, ..) => {

@@ -7,8 +7,6 @@ use std::borrow::Cow;
 #[cfg(feature = "process_factors")]
 use crate::{FactorColumn};
 
-#[cfg(feature = "temporal")]
-use polars::export::chrono::NaiveDateTime;
 
 pub fn convert_time_units(v: i64, tu_l: TimeUnit, tu_r: TimeUnit) -> i64 {
     match (tu_l, tu_r) {
@@ -77,7 +75,9 @@ pub fn get_factor_column_name(factors: &[FactorColumn], factor_tag: &'_ str, fac
 }
 
 #[cfg(feature = "temporal")]
-pub fn anyvalue_to_datetime(datetime: AnyValue) -> Result<NaiveDateTime, &str> {
+pub fn anyvalue_to_datetime(datetime: AnyValue) -> Result<polars::export::chrono::NaiveDateTime, &str> {
+    use polars::export::chrono::NaiveDateTime;
+
     match datetime {
         AnyValue::Datetime(amount, unit, ..) => {
             let naive_date_time = NaiveDateTime::from_timestamp_millis(

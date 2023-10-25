@@ -1,6 +1,6 @@
 [package]
 name = "daylio-analyze"
-version = "0.1.11"
+version = "0.1.12"
 edition = "2021"
 authors = ["Kim D. Jeker <git@kije.ch>"]
 
@@ -12,11 +12,10 @@ csv = ["polars/csv"]
 cse = ["polars/cse"]
 temporal = ["polars/temporal"]
 nightly = ["polars/nightly"]
-timezones = ["polars/timezones"]
+timezones = ["polars/timezones", "temporal"]
 process_activities = ["polars/list_sets",]
 process_factors = ["polars/extract_groups","polars/lazy_regex","polars/dtype-struct",]
 polars_features_base = [
-    "temporal",
     "polars/strings",
     "polars/dtype-date",
     "polars/dtype-datetime",
@@ -30,6 +29,7 @@ polars_features_base = [
 ]
 polars_features_minimal = [
     "polars_features_base",
+    "temporal",
     "polars/sign",
     "polars/is_in",
     "polars/diff",
@@ -40,7 +40,6 @@ polars_features_full = [
     "polars_features_minimal",
     "cse",
     "polars/concat_str",
-    "polars/async",
     "polars/simd",
     "polars/performant"
 ]

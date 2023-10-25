@@ -5,6 +5,7 @@ use std::ops::Div;
 
 use polars::export::rayon::prelude::*;
 use polars::prelude::*;
+use polars::prelude::LiteralValue::Null;
 use polars::series::ops::NullBehavior;
 use thiserror::Error;
 
@@ -287,7 +288,7 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                 .str()
                 .split("|".lit())
                 .list()
-                .eval(col("").str().strip_chars(None).filter(col("").neq(lit(""))), true)
+                .eval(col("").str().strip_chars(Null.lit()).filter(col("").neq(lit(""))), true)
                 .list()
                 .unique(),
         ]);
@@ -412,7 +413,7 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                 .otherwise(lit(false))
                 .alias("is_sleep_entry"),
             #[cfg(feature = "process_activities")]
-                { col("activities").list().lengths().alias("activities_count") },
+                { col("activities").list().len().alias("activities_count") },
             #[cfg(feature = "process_activities")]
                 { col("activities").shift(-1).alias("activities_previous") },
             #[cfg(feature = "process_activities")]
@@ -567,28 +568,28 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                         {
                             col("common_activities_with_previous")
                                 .list()
-                                .lengths()
+                                .len()
                                 .alias("common_activities_with_previous_count")
                         },
                     #[cfg(feature = "process_activities")]
                         {
                             col("common_activities_with_next")
                                 .list()
-                                .lengths()
+                                .len()
                                 .alias("common_activities_with_next_count")
                         },
                     #[cfg(feature = "process_activities")]
                         {
                             col("diff_activities_with_previous")
                                 .list()
-                                .lengths()
+                                .len()
                                 .alias("diff_activities_with_previous_count")
                         },
                     #[cfg(feature = "process_activities")]
                         {
                             col("diff_activities_with_next")
                                 .list()
-                                .lengths()
+                                .len()
                                 .alias("diff_activities_with_next_count")
                         },
                     #[cfg(feature = "process_activities")]
@@ -600,7 +601,7 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                             )
                                 .then(lit(0.0))
                                 .otherwise(
-                                    col("common_activities_with_previous").list().lengths()
+                                    col("common_activities_with_previous").list().len()
                                         * (lit(1.0).div(col("activities_count"))),
                                 )
                                 .alias("common_activities_with_previous_factor")
@@ -614,7 +615,7 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                             )
                                 .then(lit(0.0))
                                 .otherwise(
-                                    col("common_activities_with_next").list().lengths()
+                                    col("common_activities_with_next").list().len()
                                         * (lit(1.0).div(col("activities_count"))),
                                 )
                                 .alias("common_activities_with_next_factor")
@@ -628,7 +629,7 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                             )
                                 .then(lit(0.0))
                                 .otherwise(
-                                    col("diff_activities_with_previous").list().lengths()
+                                    col("diff_activities_with_previous").list().len()
                                         * (lit(1.0).div(col("activities_count"))),
                                 )
                                 .alias("diff_activities_with_previous_factor")
@@ -642,7 +643,7 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                             )
                                 .then(lit(0.0))
                                 .otherwise(
-                                    col("diff_activities_with_next").list().lengths()
+                                    col("diff_activities_with_next").list().len()
                                         * (lit(1.0).div(col("activities_count"))),
                                 )
                                 .alias("diff_activities_with_next_factor")

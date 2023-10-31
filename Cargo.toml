@@ -47,7 +47,7 @@ no_proccess = []
 
 [dependencies]
 phf = { version = "^0.11", features = ["macros"] }
-const-gen = { version = "^1.6" }
+const-gen = { version = "=1.6.2" }
 thiserror = "^1.0"
 enum-kinds = "^0.5"
 enum_access = { version = "^0.4", git = "https://github.com/kije/enum_access.git" }

@@ -54,6 +54,8 @@ type ColumnExprIter = Box<dyn Iterator<Item=Expr>>;
 #[cfg(all(not(feature = "no_proccess"), feature = "process_activities"))]
 #[inline(always)]
 fn process_activities(lf: LazyFrame) -> Result<(ActivityColumn, ColumnExprIter), ProcessError> {
+    use polars::export::rayon::prelude::*;
+
     let activities = lf
         .select([col("activities")])
         .group_by([lit("")])
@@ -129,6 +131,8 @@ fn factor_column_name(factor: &Factor, factor_type: &FactorType) -> ColumnName {
 #[cfg(all(not(feature = "no_proccess"), feature = "process_factors"))]
 #[inline(always)]
 fn process_factors(lf: LazyFrame) -> Result<(Vec<FactorColumn>, ColumnExprIter), ProcessError> {
+    use polars::export::rayon::prelude::*;
+
     let factor_col_names = FACTORS.values().flat_map(|factor| {
         factor.types().iter().map(move |&factor_type| FactorColumn {
             factor,

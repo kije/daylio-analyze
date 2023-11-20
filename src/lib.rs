@@ -49,6 +49,7 @@ pub struct ActivityColumn {
     pub binary_columns: HashMap<ActivityValue, ColumnName>,
 }
 
+#[cfg(all(not(feature = "no_proccess"), any(feature = "process_factors", feature = "process_activities")))]
 type ColumnExprIter = Box<dyn Iterator<Item=Expr>>;
 
 #[cfg(all(not(feature = "no_proccess"), feature = "process_activities"))]

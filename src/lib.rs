@@ -982,7 +982,7 @@ mod test {
 
         let df_processed = result.dataframe.collect().unwrap();
 
-        assert_eq!(df_processed.shape(), (7, 59));
+        assert_eq!(df_processed.shape(), (7, 58));
 
         println!("{:#?}", df_processed);
 

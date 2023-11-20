@@ -1,11 +1,15 @@
 [package]
 name = "daylio-analyze"
-version = "0.1.13"
+version = "0.1.14"
 edition = "2021"
 authors = ["Kim D. Jeker <git@kije.ch>"]
 
 [features]
 default = ["polars_features_minimal"]
+process_activities = ["polars/list_sets"]
+process_factors = ["polars/extract_groups","polars/lazy_regex","polars/dtype-struct"]
+no_proccess = []
+
 debug = ["fmt"]
 fmt = ["polars/fmt"]
 csv = ["polars/csv"]
@@ -13,8 +17,6 @@ cse = ["polars/cse"]
 temporal = ["polars/temporal"]
 nightly = ["polars/nightly"]
 timezones = ["polars/timezones", "temporal"]
-process_activities = ["polars/list_sets",]
-process_factors = ["polars/extract_groups","polars/lazy_regex","polars/dtype-struct",]
 polars_features_base = [
     "polars/strings",
     "polars/dtype-date",
@@ -43,11 +45,11 @@ polars_features_full = [
     "polars/simd",
     "polars/performant"
 ]
-no_proccess = []
+
 
 [dependencies]
 phf = { version = "^0.11", features = ["macros"] }
-const-gen = { version = "=1.6.2" }
+const-gen = { version = "1.6.4" }
 thiserror = "^1.0"
 enum-kinds = "^0.5"
 enum_access = { version = "^0.4", git = "https://github.com/kije/enum_access.git" }
@@ -62,7 +64,7 @@ phf_codegen = "^0.11"
 syn = { version = "^2.0", features = ["full"] }
 quote = "^1.0"
 proc-macro2 = "^1.0"
-const-gen = { version = "^1.5" }
+const-gen = { version = "^1.6" }
 
 [profile.release]
 codegen-units = 1

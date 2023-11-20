@@ -3,7 +3,6 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ops::Div;
 
-use polars::export::rayon::prelude::*;
 use polars::prelude::*;
 use polars::prelude::LiteralValue::Null;
 use polars::series::ops::NullBehavior;
@@ -37,10 +36,10 @@ pub enum ProcessError {
     Unknown,
 }
 
-type ColumnName = Cow<'static, str>;
+pub type ColumnName = Cow<'static, str>;
 
 #[cfg(feature = "process_activities")]
-type ActivityValue = Cow<'static, str>;
+pub type ActivityValue = Cow<'static, str>;
 
 #[cfg(feature = "process_activities")]
 #[derive(Clone, Debug)]
@@ -93,7 +92,7 @@ fn process_activities(lf: LazyFrame) -> Result<(ActivityColumn, ColumnExprIter),
 }
 
 #[cfg(feature = "process_factors")]
-type FactorValue = Cow<'static, str>;
+pub type FactorValue = Cow<'static, str>;
 
 #[cfg(feature = "process_factors")]
 #[derive(Clone, Debug)]
@@ -415,9 +414,9 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
             #[cfg(feature = "process_activities")]
                 { col("activities").list().len().alias("activities_count") },
             #[cfg(feature = "process_activities")]
-                { col("activities").shift(-1).alias("activities_previous") },
+                { col("activities").shift(lit(-1)).alias("activities_previous") },
             #[cfg(feature = "process_activities")]
-                { col("activities").shift(1).alias("activities_next") },
+                { col("activities").shift(lit(1)).alias("activities_next") },
         ])
         .with_columns([
             // date stuff
@@ -554,16 +553,16 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                     // mood level improvement
                     mood_improvement_col
                         .clone()
-                        .shift(1)
+                        .shift(lit(1))
                         .alias("mood_level_improvement_previous_raw"),
                     mood_improvement_col
                         .clone()
                         .alias("mood_level_improvement_raw"),
                     mood_improvement_col
                         .clone()
-                        .shift(1)
+                        .shift(lit(1))
                         .alias("mood_level_improvement_next_raw"),
-                    col("mood_level").shift(-1).alias("mood_level_previous"),
+                    col("mood_level").shift(lit(-1)).alias("mood_level_previous"),
                     #[cfg(feature = "process_activities")]
                         {
                             col("common_activities_with_previous")

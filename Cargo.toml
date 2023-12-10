@@ -1,6 +1,6 @@
 [package]
 name = "daylio-analyze"
-version = "0.1.15"
+version = "0.1.16"
 edition = "2021"
 authors = ["Kim D. Jeker <git@kije.ch>"]
 
@@ -8,12 +8,13 @@ authors = ["Kim D. Jeker <git@kije.ch>"]
 default = ["polars_features_minimal"]
 process_activities = ["polars/list_sets"]
 process_factors = ["polars/extract_groups","polars/lazy_regex","polars/dtype-struct"]
-no_proccess = []
+no_proccess = [] # todo eliminate negative feature flag. instead add "process" feature, thats enabled by default
 
 debug = ["fmt"]
 fmt = ["polars/fmt"]
 csv = ["polars/csv"]
 cse = ["polars/cse"]
+simd = ["polars/simd"]
 temporal = ["polars/temporal"]
 nightly = ["polars/nightly"]
 timezones = ["polars/timezones", "temporal"]
@@ -42,7 +43,6 @@ polars_features_full = [
     "polars_features_minimal",
     "cse",
     "polars/concat_str",
-    "polars/simd",
     "polars/performant"
 ]
 

@@ -1,14 +1,20 @@
 [package]
 name = "daylio-analyze"
-version = "0.1.16"
+version = "0.1.17"
 edition = "2021"
 authors = ["Kim D. Jeker <git@kije.ch>"]
 
+[[example]]
+name = "analyze"
+required-features = ["process", "fmt", "csv"]
+
+
 [features]
-default = ["polars_features_minimal"]
-process_activities = ["polars/list_sets"]
-process_factors = ["polars/extract_groups","polars/lazy_regex","polars/dtype-struct"]
-no_proccess = [] # todo eliminate negative feature flag. instead add "process" feature, thats enabled by default
+default = ["polars_features_minimal", "process"]
+
+process = []
+process_activities = ["process","polars/list_sets"]
+process_factors = ["process","polars/extract_groups","polars/lazy_regex","polars/dtype-struct"]
 
 debug = ["fmt"]
 fmt = ["polars/fmt"]

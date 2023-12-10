@@ -3,7 +3,7 @@ use polars::prelude::*;
 use daylio_analyze::{process, ProcessError};
 
 pub fn main() -> Result<(), ProcessError> {
-    let lf1 = LazyCsvReader::new("daylio_export.csv")
+    let lf1 = LazyCsvReader::new("./daylio_export.csv")
         .with_cache(true)
         .with_infer_schema_length(Some(5))
         .with_try_parse_dates(false)
@@ -75,7 +75,7 @@ pub fn main() -> Result<(), ProcessError> {
         )
         .collect()?;
 
-    let mut file = std::fs::File::create("daylio_export_processed.csv")?;
+    let mut file = std::fs::File::create("../daylio_export_processed.csv")?;
     CsvWriter::new(&mut file).finish(&mut export_lf1)?;
     Ok(())
 }

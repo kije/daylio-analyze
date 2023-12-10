@@ -49,10 +49,10 @@ pub struct ActivityColumn {
     pub binary_columns: HashMap<ActivityValue, ColumnName>,
 }
 
-#[cfg(all(not(feature = "no_proccess"), any(feature = "process_factors", feature = "process_activities")))]
+#[cfg(all(feature = "process", any(feature = "process_factors", feature = "process_activities")))]
 type ColumnExprIter = Box<dyn Iterator<Item=Expr>>;
 
-#[cfg(all(not(feature = "no_proccess"), feature = "process_activities"))]
+#[cfg(all(feature = "process", feature = "process_activities"))]
 #[inline(always)]
 fn process_activities(lf: LazyFrame) -> Result<(ActivityColumn, ColumnExprIter), ProcessError> {
     use polars::export::rayon::prelude::*;
@@ -118,7 +118,7 @@ impl FactorColumn {
     }
 }
 
-#[cfg(all(not(feature = "no_proccess"), feature = "process_factors"))]
+#[cfg(all(feature = "process", feature = "process_factors"))]
 #[inline(always)]
 fn factor_column_name(factor: &Factor, factor_type: &FactorType) -> ColumnName {
     let tag = factor.tag();
@@ -129,7 +129,7 @@ fn factor_column_name(factor: &Factor, factor_type: &FactorType) -> ColumnName {
     ColumnName::from(s)
 }
 
-#[cfg(all(not(feature = "no_proccess"), feature = "process_factors"))]
+#[cfg(all(feature = "process", feature = "process_factors"))]
 #[inline(always)]
 fn process_factors(lf: LazyFrame) -> Result<(Vec<FactorColumn>, ColumnExprIter), ProcessError> {
     use polars::export::rayon::prelude::*;
@@ -268,7 +268,7 @@ pub fn check_schema(lf: LazyFrame) -> Result<LazyFrame, ProcessError> {
     Ok(lf)
 }
 
-#[cfg(not(feature = "no_proccess"))]
+#[cfg(feature = "process")]
 #[derive(Clone)]
 pub struct ProcessedData {
     pub dataframe: LazyFrame,
@@ -278,7 +278,7 @@ pub struct ProcessedData {
     pub activities: ActivityColumn,
 }
 
-#[cfg(not(feature = "no_proccess"))]
+#[cfg(feature = "process")]
 pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
     let lf = check_schema(lf)?;
 

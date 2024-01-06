@@ -61,7 +61,7 @@ fn process_activities(lf: LazyFrame) -> Result<(ActivityColumn, ColumnExprIter),
         .select([col("activities")])
         .group_by([lit("")])
         .agg([col("activities")
-            .cast(DataType::List(Box::new(DataType::Utf8)))
+            .cast(DataType::List(Box::new(DataType::String)))
             .flatten()
             .unique()
             .drop_nulls()])
@@ -70,7 +70,7 @@ fn process_activities(lf: LazyFrame) -> Result<(ActivityColumn, ColumnExprIter),
 
     let activities = activities
         .column("activities")?
-        .utf8()?
+        .str()?
         .par_iter_indexed()
         .flatten()
         .map(String::from);
@@ -151,9 +151,9 @@ fn process_factors(lf: LazyFrame) -> Result<(Vec<FactorColumn>, ColumnExprIter),
                 .map(|c| {
                     if c.is_categorical() {
                         if c.is_multiple() {
-                            col(&c.column_name).cast(DataType::List(Box::new(DataType::Utf8)))
+                            col(&c.column_name).cast(DataType::List(Box::new(DataType::String)))
                         } else {
-                            col(&c.column_name).cast(DataType::Utf8)
+                            col(&c.column_name).cast(DataType::String)
                         }
                     } else {
                         col(&c.column_name)
@@ -184,7 +184,7 @@ fn process_factors(lf: LazyFrame) -> Result<(Vec<FactorColumn>, ColumnExprIter),
                 x.map(|x| {
                     (
                         ColumnName::from(s.name().to_string()),
-                        x.utf8()
+                        x.str()
                             .unwrap()
                             .par_iter()
                             .filter_map(|x| x.map(|x| FactorValue::from(x.to_string())))
@@ -258,9 +258,9 @@ pub fn check_schema(lf: LazyFrame) -> Result<LazyFrame, ProcessError> {
         || !schema.contains("time")
         || !schema.contains("activities")
         || !schema.contains("note")
-        || schema.get("full_date").unwrap() != &DataType::Utf8
-        || schema.get("time").unwrap() != &DataType::Utf8
-        || schema.get("activities").unwrap() != &DataType::Utf8
+        || schema.get("full_date").unwrap() != &DataType::String
+        || schema.get("time").unwrap() != &DataType::String
+        || schema.get("activities").unwrap() != &DataType::String
     {
         return Err(ProcessError::SchemaMismatch);
     }
@@ -381,10 +381,10 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                         new_col = if let FactorType::Taxonomy { .. } = factor_type {
                             match factor {
                                 Factor::SingleValue { .. } => {
-                                    new_col.cast(DataType::Categorical(None))
+                                    new_col.cast(DataType::Categorical(None, CategoricalOrdering::Lexical))
                                 }
                                 Factor::MultipleValue { .. } => new_col
-                                    .cast(DataType::List(Box::new(DataType::Categorical(None)))),
+                                    .cast(DataType::List(Box::new(DataType::Categorical(None, CategoricalOrdering::Lexical)))),
                             }
                         } else {
                             new_col
@@ -410,7 +410,7 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                 format: Some("%F".to_string()),
                 ..Default::default()
             }),
-            col("mood").cast(DataType::Categorical(None)),
+            col("mood").cast(DataType::Categorical(None, CategoricalOrdering::Lexical)),
             //
             when(col("activities").list().contains(lit(SLEEP_ACTIVITY)))
                 .then(lit(true))
@@ -425,7 +425,7 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
         ])
         .with_columns([
             // date stuff
-            (col("full_date").cast(DataType::Utf8) + lit(" ") + col("time").cast(DataType::Utf8))
+            (col("full_date").cast(DataType::String) + lit(" ") + col("time").cast(DataType::String))
                 .str()
                 .to_datetime(
                     Some(TimeUnit::Milliseconds),
@@ -468,11 +468,11 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                     GetOutput::from_type(DataType::UInt8),
                 )
                 .alias("mood_level"),
-            col("activities").cast(DataType::List(Box::new(DataType::Categorical(None)))),
+            col("activities").cast(DataType::List(Box::new(DataType::Categorical(None, CategoricalOrdering::Lexical)))),
             #[cfg(feature = "process_activities")]
-                { col("activities_previous").cast(DataType::List(Box::new(DataType::Categorical(None)))) },
+                { col("activities_previous").cast(DataType::List(Box::new(DataType::Categorical(None, CategoricalOrdering::Lexical)))) },
             #[cfg(feature = "process_activities")]
-                { col("activities_next").cast(DataType::List(Box::new(DataType::Categorical(None)))) },
+                { col("activities_next").cast(DataType::List(Box::new(DataType::Categorical(None, CategoricalOrdering::Lexical)))) },
             #[cfg(feature = "process_activities")]
                 {
                     col("activities")
@@ -480,7 +480,7 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                         .set_intersection(col("activities_previous"))
                         .list()
                         .unique()
-                        .cast(DataType::List(Box::new(DataType::Categorical(None))))
+                        .cast(DataType::List(Box::new(DataType::Categorical(None, CategoricalOrdering::Lexical))))
                         .alias("common_activities_with_previous")
                 },
             #[cfg(feature = "process_activities")]
@@ -490,7 +490,7 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                         .set_intersection(col("activities_next"))
                         .list()
                         .unique()
-                        .cast(DataType::List(Box::new(DataType::Categorical(None))))
+                        .cast(DataType::List(Box::new(DataType::Categorical(None, CategoricalOrdering::Lexical))))
                         .alias("common_activities_with_next")
                 },
             #[cfg(feature = "process_activities")]
@@ -500,7 +500,7 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                         .set_difference(col("activities_previous"))
                         .list()
                         .unique()
-                        .cast(DataType::List(Box::new(DataType::Categorical(None))))
+                        .cast(DataType::List(Box::new(DataType::Categorical(None, CategoricalOrdering::Lexical))))
                         .alias("diff_activities_with_previous")
                 },
             #[cfg(feature = "process_activities")]
@@ -510,7 +510,7 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                         .set_difference(col("activities_next"))
                         .list()
                         .unique()
-                        .cast(DataType::List(Box::new(DataType::Categorical(None))))
+                        .cast(DataType::List(Box::new(DataType::Categorical(None, CategoricalOrdering::Lexical))))
                         .alias("diff_activities_with_next")
                 },
         ])
@@ -757,9 +757,9 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
             .then((col("id") + lit(LAST_MOMENT_OF_THE_DAY)).cast(DataType::Time))
             .otherwise(col("time"))
             .alias("logical_time")])
-        .with_columns([(col("logical_date").cast(DataType::Utf8)
+        .with_columns([(col("logical_date").cast(DataType::String)
             + lit(" ")
-            + col("logical_time").cast(DataType::Utf8))
+            + col("logical_time").cast(DataType::String))
             .str()
             .to_datetime(
                 Some(TimeUnit::Milliseconds),
@@ -928,6 +928,7 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
 mod test {
     use super::*;
 
+    #[cfg(all(feature = "process", feature = "process_factors", feature = "process_activities"))]
     #[test]
     fn test_process_simple_dataframe() {
         let df = DataFrame::new(vec![

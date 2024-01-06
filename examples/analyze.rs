@@ -16,7 +16,7 @@ pub fn main() -> Result<(), ProcessError> {
     println!("{:#?}", lfp);
 
     let columns = [col("activities")
-        .cast(DataType::List(Box::new(DataType::Utf8)))
+        .cast(DataType::List(Box::new(DataType::String)))
         .list()
         .join(lit(" | "))];
 
@@ -26,27 +26,27 @@ pub fn main() -> Result<(), ProcessError> {
     #[cfg(feature = "process_activities")]
         let columns = columns.chain([
         col("activities_previous")
-            .cast(DataType::List(Box::new(DataType::Utf8)))
+            .cast(DataType::List(Box::new(DataType::String)))
             .list()
             .join(lit(" | ")),
         col("activities_next")
-            .cast(DataType::List(Box::new(DataType::Utf8)))
+            .cast(DataType::List(Box::new(DataType::String)))
             .list()
             .join(lit(" | ")),
         col("common_activities_with_previous")
-            .cast(DataType::List(Box::new(DataType::Utf8)))
+            .cast(DataType::List(Box::new(DataType::String)))
             .list()
             .join(lit(" | ")),
         col("common_activities_with_next")
-            .cast(DataType::List(Box::new(DataType::Utf8)))
+            .cast(DataType::List(Box::new(DataType::String)))
             .list()
             .join(lit(" | ")),
         col("diff_activities_with_previous")
-            .cast(DataType::List(Box::new(DataType::Utf8)))
+            .cast(DataType::List(Box::new(DataType::String)))
             .list()
             .join(lit(" | ")),
         col("diff_activities_with_next")
-            .cast(DataType::List(Box::new(DataType::Utf8)))
+            .cast(DataType::List(Box::new(DataType::String)))
             .list()
             .join(lit(" | ")),
     ].into_iter());
@@ -61,7 +61,7 @@ pub fn main() -> Result<(), ProcessError> {
 
             Some(
                 col(&c.column_name)
-                    .cast(DataType::List(Box::new(DataType::Utf8)))
+                    .cast(DataType::List(Box::new(DataType::String)))
                     .list()
                     .join(lit(" | ")),
             )

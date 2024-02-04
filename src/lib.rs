@@ -752,7 +752,7 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
                 .backward_fill(None)
                 .alias("logical_date"),
         ])
-        .with_row_count("id", Some(1))
+        .with_row_index("id", Some(1))
         .with_columns([when(col("logical_date").neq(col("full_date")))
             .then((col("id") + lit(LAST_MOMENT_OF_THE_DAY)).cast(DataType::Time))
             .otherwise(col("time"))
@@ -987,7 +987,7 @@ mod test {
 
         let df_processed = result.dataframe.collect().unwrap();
 
-        assert_eq!(df_processed.shape(), (7, 58));
+        assert_eq!(df_processed.shape(), (7, 59));
 
         println!("{:#?}", df_processed);
 

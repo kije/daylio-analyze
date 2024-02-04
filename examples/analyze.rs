@@ -18,7 +18,7 @@ pub fn main() -> Result<(), ProcessError> {
     let columns = [col("activities")
         .cast(DataType::List(Box::new(DataType::String)))
         .list()
-        .join(lit(" | "))];
+        .join(lit(" | "), true)];
 
     let columns = columns.into_iter();
 
@@ -28,27 +28,27 @@ pub fn main() -> Result<(), ProcessError> {
         col("activities_previous")
             .cast(DataType::List(Box::new(DataType::String)))
             .list()
-            .join(lit(" | ")),
+            .join(lit(" | "), true),
         col("activities_next")
             .cast(DataType::List(Box::new(DataType::String)))
             .list()
-            .join(lit(" | ")),
+            .join(lit(" | "), true),
         col("common_activities_with_previous")
             .cast(DataType::List(Box::new(DataType::String)))
             .list()
-            .join(lit(" | ")),
+            .join(lit(" | "), true),
         col("common_activities_with_next")
             .cast(DataType::List(Box::new(DataType::String)))
             .list()
-            .join(lit(" | ")),
+            .join(lit(" | "), true),
         col("diff_activities_with_previous")
             .cast(DataType::List(Box::new(DataType::String)))
             .list()
-            .join(lit(" | ")),
+            .join(lit(" | "), true),
         col("diff_activities_with_next")
             .cast(DataType::List(Box::new(DataType::String)))
             .list()
-            .join(lit(" | ")),
+            .join(lit(" | "), true),
     ].into_iter());
 
     #[cfg(feature = "process_factors")]
@@ -63,7 +63,7 @@ pub fn main() -> Result<(), ProcessError> {
                 col(&c.column_name)
                     .cast(DataType::List(Box::new(DataType::String)))
                     .list()
-                    .join(lit(" | ")),
+                    .join(lit(" | "), true),
             )
         }));
 

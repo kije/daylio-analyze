@@ -1,6 +1,6 @@
 [package]
 name = "daylio-analyze"
-version = "0.1.18"
+version = "0.1.19"
 edition = "2021"
 authors = ["Kim D. Jeker <git@kije.ch>"]
 
@@ -14,14 +14,14 @@ default = ["polars_features_minimal", "process"]
 
 process = []
 process_activities = ["process","polars/list_sets"]
-process_factors = ["process","polars/extract_groups","polars/lazy_regex","polars/dtype-struct"]
+process_factors = ["process","polars/extract_groups","polars/regex","polars/dtype-struct"]
 
 debug = ["fmt"]
 fmt = ["polars/fmt"]
 csv = ["polars/csv"]
 cse = [
     "polars/cse",
-    "polars/horizontal_concat" # todo maybe we can elimitate this later, seems to be unintentional that 0.36 requires it with CSE
+#    "polars/horizontal_concat" # todo maybe we can elimitate this later, seems to be unintentional that 0.36 requires it with CSE
 ]
 simd = ["polars/simd"]
 temporal = ["polars/temporal"]
@@ -46,7 +46,7 @@ polars_features_minimal = [
     "polars/is_in",
     "polars/diff",
     "polars/list_eval",
-    "polars/lazy_regex",
+    "polars/regex",
 ]
 polars_features_full = [
     "polars_features_minimal",
@@ -64,7 +64,7 @@ enum-kinds = "^0.5"
 enum_access = { version = "^0.4", git = "https://github.com/kije/enum_access.git" }
 
 [dependencies.polars]
-version = "^0.36"
+version = "^0.37"
 default-features = false
 
 [build-dependencies]

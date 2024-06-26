@@ -64,7 +64,7 @@ enum-kinds = "^0.5"
 enum_access = { version = "^0.4", git = "https://github.com/kije/enum_access.git" }
 
 [dependencies.polars]
-version = "^0.37"
+version = "^0.39"
 default-features = false
 
 [build-dependencies]

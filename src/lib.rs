@@ -729,9 +729,9 @@ pub fn process(lf: LazyFrame) -> Result<ProcessedData, ProcessError> {
 
     let lf = lf
         .sort(
-            "full_datetime",
-            SortOptions {
-                descending: false,
+            &["full_datetime"],
+            SortMultipleOptions {
+                descending: vec![false],
                 multithreaded: true,
                 ..Default::default()
             },

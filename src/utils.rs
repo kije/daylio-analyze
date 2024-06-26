@@ -4,6 +4,7 @@ use polars::prelude::*;
 #[cfg(feature = "process_factors")]
 use std::borrow::Cow;
 
+
 #[cfg(feature = "process_factors")]
 use crate::{FactorColumn};
 
@@ -76,17 +77,17 @@ pub fn get_factor_column_name(factors: &[FactorColumn], factor_tag: &'_ str, fac
 
 #[cfg(feature = "temporal")]
 pub fn anyvalue_to_datetime(datetime: AnyValue) -> Result<polars::export::chrono::NaiveDateTime, &str> {
-    use polars::export::chrono::NaiveDateTime;
+    use polars::export::chrono::DateTime;
 
     match datetime {
         AnyValue::Datetime(amount, unit, ..) => {
-            let naive_date_time = NaiveDateTime::from_timestamp_millis(
+            let naive_date_time = DateTime::from_timestamp_millis(
                 convert_time_units(
                     amount,
                     unit,
                     TimeUnit::Milliseconds,
                 )
-            ).ok_or("could not parse date")?;
+            ).ok_or("could not parse date")?.naive_utc();
 
             Ok(naive_date_time)
         }

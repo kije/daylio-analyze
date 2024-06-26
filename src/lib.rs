@@ -251,7 +251,7 @@ fn process_factors(lf: LazyFrame) -> Result<(Vec<FactorColumn>, ColumnExprIter),
 }
 
 #[inline(always)]
-pub fn check_schema(lf: LazyFrame) -> Result<LazyFrame, ProcessError> {
+pub fn check_schema(mut lf: LazyFrame) -> Result<LazyFrame, ProcessError> {
     let schema = lf.schema()?;
 
     if !schema.contains("full_date")

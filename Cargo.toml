@@ -1,6 +1,6 @@
 [package]
 name = "daylio-analyze"
-version = "0.1.20"
+version = "0.1.21"
 edition = "2021"
 authors = ["Kim D. Jeker <git@kije.ch>"]
 
@@ -72,7 +72,7 @@ phf_codegen = "^0.11"
 syn = { version = "^2.0", features = ["full"] }
 quote = "^1.0"
 proc-macro2 = "^1.0"
-const-gen = { version = "^1.6" }
+const-gen = { version = "^1.6.5" }
 
 [profile.release]
 codegen-units = 1

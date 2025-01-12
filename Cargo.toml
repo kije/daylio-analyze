@@ -20,7 +20,8 @@ debug = ["fmt"]
 fmt = ["polars/fmt"]
 csv = ["polars/csv"]
 cse = [
-    "polars/cse"
+    "polars/cse",
+#    "polars/horizontal_concat" # todo maybe we can elimitate this later, seems to be unintentional that 0.36 requires it with CSE
 ]
 simd = ["polars/simd"]
 temporal = ["polars/temporal"]
@@ -63,7 +64,7 @@ enum-kinds = "^0.5"
 enum_access = { version = "^0.4", git = "https://github.com/kije/enum_access.git" }
 
 [dependencies.polars]
-version = "^0.40"
+version = "^0.39"
 default-features = false
 
 [build-dependencies]

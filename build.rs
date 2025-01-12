@@ -408,31 +408,22 @@ fn main() {
                 .to_string(),
             )
             .entry(
-                "sym",
-                &quote!(Factor::MultipleValue {
-                    name: "Mentale Symptome",
+                "w",
+                &quote!(Factor::SingleValue {
+                    name: "Wetter",
                     types: &[&FACTOR_TYPE_C],
-                    tag: "sym"
+                    tag: "w"
                 })
                 .to_string(),
             )
             .entry(
-                "syp",
+                "sy",
                 &quote!(Factor::MultipleValue {
-                    name: "Physische Symptome",
+                    name: "Symptome",
                     types: &[&FACTOR_TYPE_C],
-                    tag: "syp"
+                    tag: "sy"
                 })
-                    .to_string(),
-            )
-            .entry(
-                "so",
-                &quote!(Factor::MultipleValue {
-                    name: "Soziale Situation",
-                    types: &[&FACTOR_TYPE_C],
-                    tag: "so"
-                })
-                    .to_string(),
+                .to_string(),
             )
             .build()
     )
